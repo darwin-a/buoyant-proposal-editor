@@ -62,6 +62,27 @@ describe('recoverBlocks', () => {
     const ids = recoverBlocks([L('OUR FIRM', 700), L('Body.', 684)]).map((b) => b.id)
     expect(new Set(ids).size).toBe(ids.length)
   })
+  it('merges a wrapped multi-line heading (same size, adjacent) into one', () => {
+    const blocks = recoverBlocks([
+      L('Statement of', 1000, 40),
+      L('Qualifications', 950, 40),
+      L('Body one here.', 900, 12),
+      L('Body two here.', 884, 12),
+      L('Body three here.', 868, 12),
+    ])
+    expect(blocks[0]).toMatchObject({ type: 'heading', text: 'Statement of Qualifications' })
+  })
+  it('does not merge headings of different sizes', () => {
+    const blocks = recoverBlocks([
+      L('Big Title', 1000, 40),
+      L('Smaller Subtitle', 958, 24),
+      L('Body one.', 920, 12),
+      L('Body two.', 904, 12),
+      L('Body three.', 888, 12),
+    ])
+    const headings = blocks.filter((b) => b.type === 'heading').map((b) => b.text)
+    expect(headings).toEqual(['Big Title', 'Smaller Subtitle'])
+  })
 })
 
 describe('detectImmutables', () => {

@@ -122,7 +122,9 @@ export function recoverBlocks(lines: Line[], docId = 'b'): Block[] {
   const blocks: Block[] = []
   let buf: string[] = []
   let n = 0
-  const flush = () => {
+  // track the open heading so a wrapped multi-line heading (same size, adjacent) merges
+  let openHeading: { block: Block; height: number; y: number } | null = null
+  const flushPara = () => {
     if (!buf.length) return
     blocks.push({ id: `${docId}-${n++}`, type: 'paragraph', text: buf.join(' ').replace(/\s+/g, ' ').trim() })
     buf = []
@@ -130,18 +132,30 @@ export function recoverBlocks(lines: Line[], docId = 'b'): Block[] {
   for (let i = 0; i < lines.length; i++) {
     const l = lines[i]
     const short = l.text.length <= 70
-    const heading = short && (isAllCaps(l.text) || l.height >= body * 1.3)
+    const isHeading = short && (isAllCaps(l.text) || l.height >= body * 1.3)
     const gapBefore = i > 0 ? lines[i - 1].y - l.y : 0
-    if (i > 0 && gapBefore > body * 1.7) flush() // paragraph break (incl. page boundary)
-    if (heading) {
-      flush()
-      const level = l.height >= body * 1.8 ? 1 : l.height >= body * 1.3 ? 2 : 3
-      blocks.push({ id: `${docId}-${n++}`, type: 'heading', text: l.text.trim(), level })
+    if (isHeading) {
+      flushPara()
+      const wraps =
+        openHeading &&
+        Math.abs(openHeading.height - l.height) < 2 && // same font size
+        openHeading.y - l.y < l.height * 1.8 // adjacent (relative to heading size)
+      if (wraps && openHeading) {
+        openHeading.block.text = `${openHeading.block.text} ${l.text.trim()}`.replace(/\s+/g, ' ').trim()
+        openHeading.y = l.y
+      } else {
+        const level = l.height >= body * 1.8 ? 1 : l.height >= body * 1.3 ? 2 : 3
+        const block: Block = { id: `${docId}-${n++}`, type: 'heading', text: l.text.trim(), level }
+        blocks.push(block)
+        openHeading = { block, height: l.height, y: l.y }
+      }
     } else {
+      if (i > 0 && gapBefore > body * 1.7) flushPara() // paragraph break (incl. page boundary)
       buf.push(l.text)
+      openHeading = null // a body line breaks the heading-merge chain
     }
   }
-  flush()
+  flushPara()
   return blocks
 }
 
