@@ -36,23 +36,39 @@ export default async function Home() {
           <Uploader />
         </div>
 
-        {proposals.length > 0 && (
-          <div className="mt-16">
-            <h2 className="mb-3 text-[11px] font-medium uppercase tracking-wide text-mute">Recent proposals</h2>
-            <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-card">
+        <div className="mt-16">
+          <h2 className="mb-3 text-[11px] font-medium uppercase tracking-wide text-mute">Recent proposals</h2>
+          {proposals.length > 0 ? (
+            <ul className="grid gap-2">
               {proposals.map((p) => (
                 <li key={p.id}>
-                  <Link href={`/proposals/${p.id}`} className="flex items-center justify-between px-4 py-3 transition hover:bg-canvas">
-                    <span className="text-sm font-medium text-ink">{p.title}</span>
-                    <span className="text-xs text-mute">
-                      {p.createdBy.name} · {new Date(p.createdAt).toLocaleDateString()}
+                  <Link
+                    href={`/proposals/${p.id}`}
+                    className="group flex items-center gap-3 rounded-xl border border-line bg-card px-4 py-3 transition hover:border-periwinkle hover:shadow-sm"
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-periwinkle-soft text-navy">
+                      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        <path d="M14 2v6h6" />
+                      </svg>
                     </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-ink">{p.title}</span>
+                      <span className="block truncate text-xs text-mute">
+                        {p.createdBy.name} · {new Date(p.createdAt).toLocaleDateString()}
+                      </span>
+                    </span>
+                    <span className="text-mute transition group-hover:translate-x-0.5 group-hover:text-periwinkle">→</span>
                   </Link>
                 </li>
               ))}
             </ul>
-          </div>
-        )}
+          ) : (
+            <div className="rounded-xl border border-dashed border-line py-10 text-center">
+              <p className="text-sm text-mute">No proposals yet — upload one above to get started.</p>
+            </div>
+          )}
+        </div>
       </div>
     </main>
   )
