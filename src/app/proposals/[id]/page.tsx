@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { db } from '@/lib/db'
 import { getCurrentUser } from '@/lib/auth'
+import { Editor } from '@/components/Editor'
 import type { Block, LockedField } from '@/lib/parse'
 
 export default async function ProposalPage({ params }: { params: Promise<{ id: string }> }) {
@@ -23,26 +24,17 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
           <span className="font-semibold">{proposal.title}</span>
         </div>
         <span className="text-xs text-gray-400">
-          reconstructed from {proposal.sourceFilename} · read-only preview (editing next)
+          reconstructed from {proposal.sourceFilename}
         </span>
       </header>
 
       <div className="mx-auto grid max-w-5xl grid-cols-[1fr_18rem] gap-8 px-6 py-10">
-        {/* document */}
-        <article className="min-w-0">
-          {blocks.length === 0 && <p className="text-sm text-gray-400">No editable text found.</p>}
-          {blocks.map((b) =>
-            b.type === 'heading' ? (
-              <h2 key={b.id} className={`mt-6 font-semibold ${b.level === 1 ? 'text-2xl' : 'text-lg'}`}>
-                {b.text}
-              </h2>
-            ) : (
-              <p key={b.id} className="mt-3 text-[15px] leading-relaxed text-gray-800">
-                {b.text}
-              </p>
-            )
-          )}
-        </article>
+        {/* editable document */}
+        {blocks.length === 0 ? (
+          <p className="text-sm text-gray-400">No editable text found.</p>
+        ) : (
+          <Editor proposalId={proposal.id} blocks={blocks} />
+        )}
 
         {/* locked-fields rail */}
         <aside className="text-sm">
