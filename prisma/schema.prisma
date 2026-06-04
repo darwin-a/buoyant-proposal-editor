@@ -83,5 +83,6 @@ model KbDocument {
   sourceFilename String
   projectType    String?
   document       Json     // ordered Block[]
+  pdfData        Bytes?   // compressed original PDF, served behind auth for the reader
   createdAt      DateTime @default(now())
 }

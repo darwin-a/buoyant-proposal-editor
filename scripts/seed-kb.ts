@@ -18,15 +18,21 @@ async function main() {
   for (const { file, type } of KB) {
     const data = new Uint8Array(await readFile(`docs/ExampleProposals/kb/${file}`))
     const parsed = await parsePdf(data, file)
+    // Compressed copy (gs ebook quality, ~2MB) for the in-app PDF reader; falls
+    // back to the original if the compressed cache isn't present.
+    const pdf = await readFile(`docs/ExampleProposals/kb/_compressed/${file}`).catch(() =>
+      readFile(`docs/ExampleProposals/kb/${file}`),
+    )
     await db.kbDocument.create({
       data: {
         title: parsed.title,
         sourceFilename: file,
         projectType: type,
         document: parsed.blocks as unknown as Prisma.InputJsonValue,
+        pdfData: pdf,
       },
     })
-    console.log(`kb: ${parsed.title}  (${type})`)
+    console.log(`kb: ${parsed.title}  (${type}, ${(pdf.length / 1e6).toFixed(1)}MB pdf)`)
   }
 }
 
