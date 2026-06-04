@@ -1,0 +1,73 @@
+// Buoyant edit-loop schema. See docs/agentic_implementations/specs/2026-06-03-pdf-edit-loop-design.md
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  COORDINATOR
+  PRINCIPAL
+  ENGINEER
+}
+
+enum EditKind {
+  MANUAL
+  AI
+}
+
+enum EditStatus {
+  APPLIED
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  role      Role
+  createdAt DateTime @default(now())
+
+  proposalsCreated Proposal[] @relation("createdBy")
+  edits            Edit[]     @relation("author")
+}
+
+model Proposal {
+  id                    String   @id @default(cuid())
+  title                 String
+  sourceFilename        String
+  document              Json     // ordered Block[] from the parser
+  lockedFields          Json     @default("[]") // { label, value }[] immutable facts
+  createdById           String
+  createdBy             User     @relation("createdBy", fields: [createdById], references: [id])
+  reviewRequestedFromId String? // light "request review from X"
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  edits Edit[]
+}
+
+// One table = edit log + review queue (live edits + sign-off model)
+model Edit {
+  id              String     @id @default(cuid())
+  proposalId      String
+  proposal        Proposal   @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  blockId         String
+  authorId        String
+  author          User       @relation("author", fields: [authorId], references: [id])
+  kind            EditKind
+  instruction     String?
+  before          String
+  after           String
+  rationale       String?
+  changedEntities Json       @default("[]")
+  status          EditStatus @default(APPLIED)
+  reviewedById    String?
+  reviewedAt      DateTime?
+  createdAt       DateTime   @default(now())
+}
