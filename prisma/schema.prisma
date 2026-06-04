@@ -4,8 +4,12 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  // pooled connection (pgbouncer) for the app's serverless queries
+  url       = env("DATABASE_URL")
+  // direct connection for `prisma migrate` — a pooler can't run migrations.
+  // Locally, point this at the same Docker DB as DATABASE_URL.
+  directUrl = env("DIRECT_URL")
 }
 
 enum Role {
