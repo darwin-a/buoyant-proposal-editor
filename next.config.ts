@@ -6,6 +6,8 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: import.meta.dirname,
   },
+  // pdfjs runs in Node in our parse route; don't bundle it.
+  serverExternalPackages: ["pdfjs-dist"],
 };
 
 export default nextConfig;
