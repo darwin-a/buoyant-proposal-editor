@@ -5,8 +5,9 @@ import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { Extension } from '@tiptap/core'
 import { blocksToDoc, docToBlocks, type PMDoc } from '@/lib/tiptap'
-import type { Block } from '@/lib/parse'
+import type { Block, LockedField } from '@/lib/parse'
 import type { EditResponse } from '@/lib/edit-service'
+import { findLockedViolations } from '@/lib/locked-fields'
 import { DiffView } from './DiffView'
 
 // Carry our block id as a node attribute so edits stay addressable.
@@ -29,13 +30,21 @@ const BlockId = Extension.create({
 })
 
 type Status = 'saved' | 'dirty' | 'saving'
-type ActiveBlock = { blockId: string; text: string }
+type Selection = { from: number; to: number; text: string; blockId: string; top: number; left: number }
 type AiPhase = 'closed' | 'instructing' | 'proposing' | 'diff'
 
-export function Editor({ proposalId, blocks }: { proposalId: string; blocks: Block[] }) {
+export function Editor({
+  proposalId,
+  blocks,
+  lockedFields,
+}: {
+  proposalId: string
+  blocks: Block[]
+  lockedFields: LockedField[]
+}) {
   const [status, setStatus] = useState<Status>('saved')
-  const [active, setActive] = useState<ActiveBlock | null>(null)
-  const [aiTarget, setAiTarget] = useState<ActiveBlock | null>(null)
+  const [sel, setSel] = useState<Selection | null>(null) // live selection → floating trigger
+  const [target, setTarget] = useState<Selection | null>(null) // captured for the AI flow
   const [phase, setPhase] = useState<AiPhase>('closed')
   const [instruction, setInstruction] = useState('')
   const [proposed, setProposed] = useState<EditResponse | null>(null)
@@ -47,10 +56,13 @@ export function Editor({ proposalId, blocks }: { proposalId: string; blocks: Blo
     editorProps: { attributes: { class: 'doc-editor' } },
     onUpdate: () => setStatus((s) => (s === 'saving' ? s : 'dirty')),
     onSelectionUpdate: ({ editor }) => {
-      const { $from } = editor.state.selection
-      if ($from.depth < 1) return setActive(null)
-      const node = $from.node(1)
-      setActive({ blockId: (node.attrs.blockId as string) ?? '', text: node.textContent })
+      const { from, to, $from } = editor.state.selection
+      if (from === to) return setSel(null) // collapsed cursor → no menu
+      const text = editor.state.doc.textBetween(from, to, ' ').trim()
+      if (!text) return setSel(null)
+      const blockId = ($from.depth >= 1 ? ($from.node(1).attrs.blockId as string) : '') ?? ''
+      const coords = editor.view.coordsAtPos(from)
+      setSel({ from, to, text, blockId, top: coords.top, left: coords.left })
     },
   })
 
@@ -66,90 +78,95 @@ export function Editor({ proposalId, blocks }: { proposalId: string; blocks: Blo
     setStatus(res.ok ? 'saved' : 'dirty')
   }
 
-  function openAi() {
-    if (!active?.text.trim()) return
-    setAiTarget(active)
+  function askAi() {
+    if (!sel) return
+    setTarget(sel)
     setInstruction('')
     setProposed(null)
     setPhase('instructing')
   }
 
+  function close() {
+    setPhase('closed')
+    setTarget(null)
+  }
+
   async function propose() {
-    if (!aiTarget || !instruction.trim()) return
+    if (!target || !instruction.trim()) return
     setPhase('proposing')
     const res = await fetch('/api/edit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ blockText: aiTarget.text, instruction }),
+      body: JSON.stringify({ blockText: target.text, instruction }),
     })
     setProposed(await res.json())
     setPhase('diff')
   }
 
-  function applyToBlock(blockId: string, newText: string) {
-    if (!editor) return
-    const { state, view } = editor
-    let target: { pos: number; size: number } | null = null
-    state.doc.descendants((node, pos) => {
-      if (target) return false
-      if (node.attrs?.blockId === blockId) target = { pos, size: node.nodeSize }
-      return true
-    })
-    if (!target) return
-    const { pos, size } = target
-    view.dispatch(state.tr.insertText(newText, pos + 1, pos + size - 1))
-  }
-
-  async function accept() {
-    if (!aiTarget || !proposed) return
-    applyToBlock(aiTarget.blockId, proposed.proposedText)
-    setPhase('closed')
-    await save()
-    // log the applied edit (edit history / review trail)
+  function accept() {
+    if (!editor || !target || !proposed) return
+    editor.chain().focus().insertContentAt({ from: target.from, to: target.to }, proposed.proposedText).run()
+    void save()
     void fetch(`/api/proposals/${proposalId}/edits`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        blockId: aiTarget.blockId,
+        blockId: target.blockId,
         kind: 'ai',
         instruction,
-        before: aiTarget.text,
+        before: target.text,
         after: proposed.proposedText,
         rationale: proposed.rationale,
         changedEntities: proposed.changedEntities,
       }),
     })
+    close()
   }
 
   const label = status === 'saved' ? 'All changes saved' : status === 'saving' ? 'Saving…' : 'Unsaved changes'
+  const clampLeft = (x: number) => (typeof window !== 'undefined' ? Math.min(x, window.innerWidth - 430) : x)
+  const clampTop = (y: number) => {
+    const h = typeof window !== 'undefined' ? window.innerHeight : 800
+    return Math.max(80, Math.min(y, h - 340)) // keep the whole card (incl. buttons) on screen
+  }
 
   return (
     <div className="min-w-0">
       <div className="mb-8 flex items-center justify-between border-b border-gray-100 pb-3">
         <span className="text-xs text-gray-400">{label}</span>
-        <div className="flex items-center gap-2">
+        <button
+          onClick={save}
+          disabled={status !== 'dirty'}
+          className="rounded-md bg-gray-900 px-3 py-1.5 text-xs font-medium text-white transition disabled:opacity-25"
+        >
+          Save
+        </button>
+      </div>
+
+      <EditorContent editor={editor} />
+      <p className="mt-6 text-xs text-gray-300">Tip: highlight any text to edit it with AI.</p>
+
+      {/* floating ✨ trigger at the selection */}
+      {phase === 'closed' && sel && (
+        <div style={{ position: 'fixed', top: sel.top - 44, left: sel.left, zIndex: 30 }}>
           <button
-            onClick={openAi}
-            disabled={!active?.text.trim()}
-            className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:border-gray-400 disabled:opacity-30"
-            title={active?.text.trim() ? 'Edit the current block with AI' : 'Click into a paragraph first'}
+            onMouseDown={(e) => e.preventDefault()} // keep the editor selection
+            onClick={askAi}
+            className="rounded-full bg-gray-900 px-3 py-1.5 text-xs font-medium text-white shadow-lg hover:bg-gray-700"
           >
             ✨ Ask AI
           </button>
-          <button
-            onClick={save}
-            disabled={status !== 'dirty'}
-            className="rounded-md bg-gray-900 px-3 py-1.5 text-xs font-medium text-white transition disabled:opacity-25"
-          >
-            Save
-          </button>
         </div>
-      </div>
+      )}
 
-      {phase !== 'closed' && aiTarget && (
-        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50/50 p-4">
-          <div className="mb-3 text-xs text-gray-500">
-            Editing: “{aiTarget.text.slice(0, 90)}{aiTarget.text.length > 90 ? '…' : ''}”
+      {/* floating instruction / diff card anchored at the selection */}
+      {phase !== 'closed' && target && (
+        <div
+          style={{ position: 'fixed', top: clampTop(target.top + 24), left: clampLeft(target.left), zIndex: 30 }}
+          className="w-[26rem] rounded-xl border border-gray-200 bg-white p-3 shadow-2xl"
+        >
+          <div className="mb-2 text-[11px] text-gray-400">
+            Editing “{target.text.slice(0, 70)}{target.text.length > 70 ? '…' : ''}”
           </div>
 
           {phase === 'instructing' && (
@@ -158,33 +175,50 @@ export function Editor({ proposalId, blocks }: { proposalId: string; blocks: Blo
                 autoFocus
                 value={instruction}
                 onChange={(e) => setInstruction(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && propose()}
-                placeholder="Tell the AI what to change… (e.g. “tighten this”, “the client is Dixon”)"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') propose()
+                  if (e.key === 'Escape') close()
+                }}
+                placeholder="Tell the AI what to change…"
                 className="flex-1 rounded border border-gray-300 px-2 py-1.5 text-sm outline-none focus:border-gray-900"
               />
               <button onClick={propose} disabled={!instruction.trim()} className="rounded bg-gray-900 px-3 py-1.5 text-sm text-white disabled:opacity-30">
                 Propose
               </button>
-              <button onClick={() => setPhase('closed')} className="px-2 text-sm text-gray-500">Cancel</button>
+              <button onClick={close} className="px-1 text-sm text-gray-400">✕</button>
             </div>
           )}
 
-          {phase === 'proposing' && <p className="text-sm text-gray-500">Proposing…</p>}
+          {phase === 'proposing' && <p className="py-1 text-sm text-gray-500">Proposing…</p>}
 
-          {phase === 'diff' && proposed && (
-            <div>
-              <DiffView before={aiTarget.text} after={proposed.proposedText} />
-              <p className="mt-2 text-xs text-gray-500">ⓘ {proposed.rationale}</p>
-              <div className="mt-3 flex gap-2">
-                <button onClick={accept} className="rounded bg-green-700 px-3 py-1.5 text-sm font-medium text-white">Apply</button>
-                <button onClick={() => setPhase('closed')} className="px-2 text-sm text-gray-500">Reject</button>
+          {phase === 'diff' && proposed && (() => {
+            const violations = findLockedViolations(target.text, proposed.proposedText, lockedFields, proposed.changedEntities)
+            return (
+              <div>
+                <div className="max-h-[32vh] overflow-y-auto pr-1">
+                  <DiffView before={target.text} after={proposed.proposedText} />
+                  <p className="mt-2 text-[11px] text-gray-500">ⓘ {proposed.rationale}</p>
+                </div>
+                {violations.length > 0 && (
+                  <div className="mt-2 rounded border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] text-red-700">
+                    ⚠ This also changes a locked {violations.length === 1 ? 'fact' : 'facts'}:{' '}
+                    <span className="font-medium">{violations.map((v) => v.value).join(', ')}</span>.
+                  </div>
+                )}
+                <div className="mt-3 flex items-center gap-2">
+                  <button
+                    onClick={accept}
+                    className={`rounded px-3 py-1.5 text-sm font-medium text-white ${violations.length ? 'bg-red-600 hover:bg-red-700' : 'bg-green-700'}`}
+                  >
+                    {violations.length ? 'Apply anyway' : 'Apply'}
+                  </button>
+                  <button onClick={close} className="px-2 text-sm text-gray-500">Reject</button>
+                </div>
               </div>
-            </div>
-          )}
+            )
+          })()}
         </div>
       )}
-
-      <EditorContent editor={editor} />
     </div>
   )
 }

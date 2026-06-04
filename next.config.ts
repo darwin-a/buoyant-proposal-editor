@@ -9,6 +9,8 @@ const nextConfig: NextConfig = {
   },
   // pdfjs runs in Node in our parse route; don't bundle it.
   serverExternalPackages: ["pdfjs-dist"],
+  // hide the dev-tools overlay (intercepts clicks near the corner; clutters screenshots)
+  devIndicators: false,
 };
 
 export default nextConfig;

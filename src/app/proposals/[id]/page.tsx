@@ -34,7 +34,7 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
           {blocks.length === 0 ? (
             <p className="text-sm text-gray-400">No editable text found.</p>
           ) : (
-            <Editor proposalId={proposal.id} blocks={blocks} />
+            <Editor proposalId={proposal.id} blocks={blocks} lockedFields={locked} />
           )}
         </div>
 
