@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { db } from '@/lib/db'
 import { getCurrentUser } from '@/lib/auth'
-import { Editor } from '@/components/Editor'
+import { Workspace } from '@/components/Workspace'
 import type { Block, LockedField } from '@/lib/parse'
 
 export default async function ProposalPage({ params }: { params: Promise<{ id: string }> }) {
@@ -28,38 +28,7 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
         </span>
       </header>
 
-      <div className="mx-auto grid max-w-6xl grid-cols-[minmax(0,1fr)_16rem] gap-8 px-6 py-10">
-        {/* document sheet */}
-        <div className="rounded-2xl border border-line bg-card px-10 py-12 shadow-sm">
-          {blocks.length === 0 ? (
-            <p className="text-sm text-mute">No editable text found.</p>
-          ) : (
-            <Editor proposalId={proposal.id} blocks={blocks} lockedFields={locked} />
-          )}
-        </div>
-
-        {/* locked-fields rail */}
-        <aside className="sticky top-24 self-start">
-          <div className="mb-3 flex items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wide text-mute">Locked facts</span>
-            <span className="rounded-full bg-navy px-1.5 py-0.5 text-[10px] font-medium text-white">{locked.length}</span>
-          </div>
-          <p className="mb-3 text-xs leading-relaxed text-mute">
-            Detected automatically. Edits that change these will warn before they’re saved.
-          </p>
-          <ul className="space-y-1.5">
-            {locked.map((f, i) => (
-              <li key={i} className="rounded-lg border border-line bg-card px-2.5 py-1.5">
-                <span className="block text-[10px] uppercase tracking-wide text-mute">{f.label}</span>
-                <span className="flex items-center gap-1 text-sm text-ink">
-                  <span className="text-periwinkle">🔒</span> {f.value}
-                </span>
-              </li>
-            ))}
-            {locked.length === 0 && <li className="text-xs text-mute">None detected.</li>}
-          </ul>
-        </aside>
-      </div>
+      <Workspace proposalId={proposal.id} blocks={blocks} lockedFields={locked} />
     </main>
   )
 }

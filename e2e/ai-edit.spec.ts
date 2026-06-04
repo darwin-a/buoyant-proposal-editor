@@ -73,4 +73,8 @@ test('mock: literal "change Dixon to Walia" replaces and applies', async ({ page
   await page.getByRole('button', { name: /^Apply/ }).click({ force: true })
   await expect(page.getByText('All changes saved')).toBeVisible()
   await expect(page.locator('.doc-editor', { hasText: 'City of Walia' })).toBeVisible()
+
+  // the live locked-facts rail flags the changed fact
+  await expect(page.getByText(/1 changed/)).toBeVisible()
+  await page.screenshot({ path: 'e2e/screenshots/07-live-rail.png' })
 })

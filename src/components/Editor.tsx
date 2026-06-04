@@ -37,10 +37,12 @@ export function Editor({
   proposalId,
   blocks,
   lockedFields,
+  onDocChange,
 }: {
   proposalId: string
   blocks: Block[]
   lockedFields: LockedField[]
+  onDocChange?: (text: string) => void
 }) {
   const [status, setStatus] = useState<Status>('saved')
   const [sel, setSel] = useState<Selection | null>(null) // live selection → floating trigger
@@ -54,7 +56,10 @@ export function Editor({
     content: blocksToDoc(blocks),
     immediatelyRender: false,
     editorProps: { attributes: { class: 'doc-editor' } },
-    onUpdate: () => setStatus((s) => (s === 'saving' ? s : 'dirty')),
+    onUpdate: ({ editor }) => {
+      setStatus((s) => (s === 'saving' ? s : 'dirty'))
+      onDocChange?.(editor.getText())
+    },
     onSelectionUpdate: ({ editor }) => {
       const { from, to, $from } = editor.state.selection
       if (from === to) return setSel(null) // collapsed cursor → no menu
