@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "db:seed": "tsx prisma/seed.ts",
-    "db:reset": "prisma migrate reset --force"
+    "db:reset": "prisma migrate reset --force",
+    "eval": "tsx scripts/eval.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
