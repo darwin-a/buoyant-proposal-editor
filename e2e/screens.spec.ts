@@ -22,4 +22,9 @@ test('capture key screens', async ({ page }) => {
   await page.waitForSelector('.doc-editor')
   await page.screenshot({ path: 'e2e/screenshots/03-editor-top.png' })
   await page.screenshot({ path: 'e2e/screenshots/03-editor-full.png', fullPage: true })
+
+  // 4. knowledge base
+  await page.goto('/kb')
+  await page.waitForSelector('h1:has-text("Knowledge base")')
+  await page.screenshot({ path: 'e2e/screenshots/08-kb.png' })
 })

@@ -71,3 +71,13 @@ model Edit {
   reviewedAt      DateTime?
   createdAt       DateTime   @default(now())
 }
+
+// The firm's PAST proposals — read-only knowledge base (browse + ground edits in).
+model KbDocument {
+  id             String   @id @default(cuid())
+  title          String
+  sourceFilename String
+  projectType    String?
+  document       Json     // ordered Block[]
+  createdAt      DateTime @default(now())
+}

@@ -20,7 +20,13 @@ export default async function Home() {
   return (
     <main className="min-h-screen">
       <header className="flex items-center justify-between border-b border-line bg-card/70 px-6 py-3 backdrop-blur">
-        <BuoyantLogo />
+        <div className="flex items-center gap-6">
+          <BuoyantLogo />
+          <nav className="flex gap-4 text-sm">
+            <Link href="/" className="font-medium text-ink">Proposals</Link>
+            <Link href="/kb" className="text-mute transition hover:text-ink">Knowledge base</Link>
+          </nav>
+        </div>
         <div className="flex items-center gap-3 text-sm">
           <span className="text-mute">
             {user.name} · <span className="lowercase">{user.role}</span>

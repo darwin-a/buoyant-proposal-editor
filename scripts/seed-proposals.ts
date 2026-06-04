@@ -4,12 +4,8 @@ import { readFile } from 'node:fs/promises'
 import { db } from '../src/lib/db'
 import { createProposalFromPdf } from '../src/lib/proposals'
 
-const FILES = [
-  'docs/ExampleProposals/proposals/easy.pdf',
-  'docs/ExampleProposals/kb/hannibal_demolition_soq.pdf',
-  'docs/ExampleProposals/kb/macon_city_soq.pdf',
-  'docs/ExampleProposals/kb/palmyra_modot_tap_soq.pdf',
-]
+// active proposals = ones being edited (the kb/ corpus is the knowledge base, seeded separately)
+const FILES = ['docs/ExampleProposals/proposals/easy.pdf']
 
 async function main() {
   await db.proposal.deleteMany()
