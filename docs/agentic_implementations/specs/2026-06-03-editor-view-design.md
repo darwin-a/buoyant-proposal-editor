@@ -51,24 +51,38 @@ signals:
 3. **Honesty label** — "reconstructed from easy.pdf" sets the expectation that this is
    the *editable* version, not a pixel copy (which the brief blesses, C6).
 
-## 3. The edit interaction (inline)
+## 3. The edit interaction (inline) — two ways to edit
 
-Select a block → it opens in place with **just a free-text box**. Very basic for now
-— no quick-action chips (deferred; see §7). Type the instruction in plain language.
+A block supports **both** kinds of editing, because a proposal coordinator does both:
+direct manual fixes (change a date, correct a name's spelling) *and* AI asks (tighten,
+rewrite, add from past work). We don't force everything through the AI.
+
+**Click a block → it becomes directly editable** (cursor in the text; type like a normal
+editor). An **✨ Ask AI** affordance sits on the block to summon the assistant instead.
 
 ```
 ┌────────────────────────────────────────┐
 │ OUR FIRM                                │
-│ MECO Engineering is celebrating its     │
-│ 40th anniversary this year …            │
+│ MECO Engineering is celebrating its     │  ← editable text:
+│ 40th anniversary this year …|           │    click in & type directly
+│                              [✨ Ask AI] │  ← or summon the AI
+└────────────────────────────────────────┘
+```
+
+**Manual edit** — type directly; on save (blur / ⌘↵) the block updates. A normal applied
+edit: undoable and logged like any other.
+
+**AI edit** — click ✨ Ask AI → a basic free-text instruction box (chips deferred, §7):
+
+```
 ├────────────────────────────────────────┤
 │ ┌────────────────────────────────────┐ │
 │ │ Tell the AI what to change…         │ │   ← plain language
 │ └────────────────────────────────────┘ │
-└────────────────────────────────────────┘
 ```
 
-Then the proposal returns as an **inline word-level diff** + a one-line **rationale**:
+The AI returns an **inline word-level diff** + a one-line **rationale** — and the proposed
+text is **itself editable** before you commit, so you can tweak the AI, then Apply / Reject:
 
 ```
 │ MECO Engineering is celebrating its 40th anniversary this year.
@@ -88,12 +102,16 @@ Deliberate touches (chips deferred — see §7; starting basic):
 
 ## 4. Block lifecycle (states)
 
-`idle → hover → selected(editing) → proposing → diff → applied`
+`idle → hover → selected`, then either path:
+- **manual:** `selected → editing-text → applied`
+- **AI:** `selected → asking-AI → proposing → diff (editable) → applied`
+
 plus collaboration: `pending-review` (a teammate proposed; awaits approval).
 
 - **idle** — rendered block.
-- **hover** — lifts/highlights; reveals the ✎ "edit with AI" affordance.
-- **selected** — chips + instruction input (§3).
+- **hover** — lifts/highlights; reveals that the block is editable + the ✨ Ask AI affordance.
+- **selected** — block is directly editable inline; **✨ Ask AI** available (§3).
+- **editing-text** — user is typing a manual edit; save on blur / ⌘↵.
 - **proposing** — awaiting AI (streaming if available; see Perf).
 - **diff** — inline diff + rationale + Apply/Reject.
 - **applied** — text swapped; logged.
