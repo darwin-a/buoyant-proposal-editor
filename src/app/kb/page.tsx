@@ -41,13 +41,24 @@ export default async function KbPage() {
             <li key={d.id}>
               <Link
                 href={`/kb/${d.id}`}
-                className="flex h-full flex-col rounded-xl border border-line bg-card p-4 transition hover:border-periwinkle hover:shadow-sm"
+                className="group flex h-full flex-col rounded-xl border border-line bg-card p-4 transition hover:border-periwinkle hover:shadow-sm"
               >
-                <span className="mb-2 inline-flex w-fit rounded bg-periwinkle-soft px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-navy">
-                  {d.projectType}
-                </span>
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-periwinkle-soft text-navy">
+                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                      <path d="M14 2v6h6" />
+                    </svg>
+                  </span>
+                  <span className="rounded bg-periwinkle-soft px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-navy">
+                    {d.projectType}
+                  </span>
+                </div>
                 <span className="text-sm font-medium text-ink">{d.title}</span>
                 <span className="mt-1 truncate text-xs text-mute">{d.sourceFilename}</span>
+                <span className="mt-3 text-xs font-medium text-mute transition group-hover:text-periwinkle">
+                  Read PDF →
+                </span>
               </Link>
             </li>
           ))}

@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { db } from '@/lib/db'
 import { getCurrentUser } from '@/lib/auth'
+import { PdfReader } from '@/components/PdfReader'
 
 export default async function KbDocPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser()
@@ -37,11 +38,7 @@ export default async function KbDocPage({ params }: { params: Promise<{ id: stri
         </a>
       </header>
 
-      <iframe
-        src={`/api/kb/${doc.id}/pdf`}
-        title={doc.title}
-        className="min-h-0 w-full flex-1 bg-canvas"
-      />
+      <PdfReader src={`/api/kb/${doc.id}/pdf`} title={doc.title} />
     </main>
   )
 }
