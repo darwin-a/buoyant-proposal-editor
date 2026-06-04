@@ -54,3 +54,9 @@ next-env.d.ts
 /docs/_analysis/
 /docs/TakeHomeExampleProposals.zip
 
+# playwright (artifacts; screenshots render MECO content so keep them local)
+/test-results/
+/playwright-report/
+/playwright/.cache/
+/e2e/screenshots/
+

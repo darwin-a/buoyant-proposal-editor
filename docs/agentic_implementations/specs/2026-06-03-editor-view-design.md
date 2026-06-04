@@ -155,6 +155,29 @@ Lives in the right rail + light in-block cues:
       the affordance live (between blocks)?
 - [ ] Empty/error/parse-failed states for the document view.
 
+## 8. Editor tech & AI-edit UX — decided (research-informed)
+
+Researched the category (TipTap/Lexical/ProseMirror · Cursor/Grammarly/Lex/doXmind ·
+Proposify/PandaDoc) before committing. Findings validated the design and set the stack:
+
+- **Editing surface: TipTap (ProseMirror).** The 2026 default for document editors.
+  Crucially, ProseMirror **decorations** are how we overlay **inline diffs** and
+  **locked-field highlights** without mutating the text — the two hardest parts become
+  first-class. (Plain per-block textareas were the simpler alternative; rejected for
+  weaker diff/lock overlays.)
+- **AI edits: inline diff, per-change accept/reject.** The loved pattern — Cursor users
+  revolted when it was removed; Grammarly's top complaint is no in-context preview. Show
+  the diff in place; accept/reject per change.
+- **Locked fields: in-editor highlight + warn-on-change.** Exactly how Proposify/PandaDoc
+  lock template fields while variable sections are edited — validates our locked-fields +
+  "PDFs are templates" model.
+- **Mental model: "code review for writing"** (doXmind's framing = our proposal=codebase /
+  review=PR-review model). Propose → review → apply.
+
+Build plan: TipTap loads our `Block[]` as the document; manual edits via TipTap; ✨ Ask AI →
+mock EditService → inline diff decoration → accept/reject → persist to the `Edit` log;
+locked values rendered as decorations that warn when an edit would change them.
+
 ## Requirements touched
 
 R4 (render interactively) · R5 (select + instruct) · R6 (proposed change + decide) ·
