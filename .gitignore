@@ -46,6 +46,10 @@ next-env.d.ts
 # parse cache
 .cache/
 
-# provided fixtures — large binaries kept out of git history
-docs/TakeHomeExampleProposals.zip
-docs/ExampleProposals/**/*.pdf
+# take-home source materials — kept LOCAL for dev, never published to the public repo
+# (Buoyant's brief + MECO's real proposals; scrubbed from history too)
+/docs/take-home-assessment.md
+/docs/requirements.md
+/docs/ExampleProposals/
+/docs/_analysis/
+/docs/TakeHomeExampleProposals.zip
