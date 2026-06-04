@@ -1,0 +1,27 @@
+# Secrets
+.env
+.env.local
+.env*.local
+
+# Dependencies & build (Next.js — added preemptively)
+node_modules/
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+
+# Caches
+.cache/
+
+# OS / editor
+.DS_Store
+
+# Local Claude settings (permission allowlist stays local)
+.claude/settings.local.json
+
+# Provided fixtures — large binaries, kept out of git history
+# (the app will bundle just easy.pdf as a sample later, deliberately)
+docs/TakeHomeExampleProposals.zip
+docs/ExampleProposals/**/*.pdf
