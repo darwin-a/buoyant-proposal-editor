@@ -7,7 +7,7 @@ import { Extension } from '@tiptap/core'
 import { blocksToDoc, docToBlocks, type PMDoc } from '@/lib/tiptap'
 import type { Block, LockedField } from '@/lib/parse'
 import type { EditResponse } from '@/lib/edit-service'
-import { findLockedViolations } from '@/lib/locked-fields'
+import { analyzeLockedChange } from '@/lib/locked-fields'
 import { DiffView } from './DiffView'
 
 // Carry our block id as a node attribute so edits stay addressable.
@@ -197,27 +197,37 @@ export function Editor({
           {phase === 'proposing' && <p className="py-1 text-sm text-mute">Proposing…</p>}
 
           {phase === 'diff' && proposed && (() => {
-            const violations = findLockedViolations(target.text, proposed.proposedText, lockedFields, proposed.changedEntities)
+            const { collateral, intentional } = analyzeLockedChange(
+              target.text,
+              proposed.proposedText,
+              lockedFields,
+              proposed.changedEntities,
+            )
             return (
               <div>
                 <div className="max-h-[32vh] overflow-y-auto pr-1">
                   <DiffView before={target.text} after={proposed.proposedText} />
-                  <p className="mt-2 text-[11px] text-gray-500">ⓘ {proposed.rationale}</p>
+                  <p className="mt-2 text-[11px] text-mute">ⓘ {proposed.rationale}</p>
                 </div>
-                {violations.length > 0 && (
+                {collateral.length > 0 ? (
                   <div className="mt-2 rounded border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] text-red-700">
-                    ⚠ This also changes a locked {violations.length === 1 ? 'fact' : 'facts'}:{' '}
-                    <span className="font-medium">{violations.map((v) => v.value).join(', ')}</span>.
+                    ⚠ This also changes a locked {collateral.length === 1 ? 'fact' : 'facts'} you didn’t ask about:{' '}
+                    <span className="font-medium">{collateral.map((v) => v.value).join(', ')}</span>.
                   </div>
-                )}
+                ) : intentional.length > 0 ? (
+                  <div className="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">
+                    🔒 You’re changing a locked {intentional.length === 1 ? 'fact' : 'facts'}:{' '}
+                    <span className="font-medium">{intentional.map((v) => v.value).join(', ')}</span>.
+                  </div>
+                ) : null}
                 <div className="mt-3 flex items-center gap-2">
                   <button
                     onClick={accept}
-                    className={`rounded px-3 py-1.5 text-sm font-medium text-white ${violations.length ? 'bg-red-600 hover:bg-red-700' : 'bg-green-700'}`}
+                    className={`rounded px-3 py-1.5 text-sm font-medium text-white ${collateral.length ? 'bg-red-600 hover:bg-red-700' : 'bg-green-700'}`}
                   >
-                    {violations.length ? 'Apply anyway' : 'Apply'}
+                    {collateral.length ? 'Apply anyway' : 'Apply'}
                   </button>
-                  <button onClick={close} className="px-2 text-sm text-gray-500">Reject</button>
+                  <button onClick={close} className="px-2 text-sm text-mute">Reject</button>
                 </div>
               </div>
             )
