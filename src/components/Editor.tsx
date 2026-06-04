@@ -168,7 +168,7 @@ export function Editor({
       {phase !== 'closed' && target && (
         <div
           style={{ position: 'fixed', top: clampTop(target.top + 24), left: clampLeft(target.left), zIndex: 30 }}
-          className="w-[26rem] rounded-xl border border-line bg-card p-3 shadow-2xl"
+          className="animate-pop w-[26rem] rounded-xl border border-line bg-card p-3 shadow-2xl"
         >
           <div className="mb-2 text-[11px] text-mute">
             Editing “{target.text.slice(0, 70)}{target.text.length > 70 ? '…' : ''}”
