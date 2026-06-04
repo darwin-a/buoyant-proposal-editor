@@ -10,7 +10,7 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Buoyant — Proposal Editor",
   description: "Edit civil-engineering proposals with AI, grounded in your firm's past work.",
-  icons: { icon: "/b-logo.svg" },
+  // favicon comes from the file-convention src/app/icon.svg (single source of truth).
 };
 
 export default function RootLayout({
