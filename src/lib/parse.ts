@@ -31,6 +31,27 @@ const median = (xs: number[]): number => {
 }
 const isAllCaps = (t: string) => /[A-Z]/.test(t) && t === t.toUpperCase()
 
+// ---- shadow/overlap dedup ----
+// Design tools (Canva) draw outline/drop-shadow effects as the SAME text at near-
+// coincident coordinates. Same string + overlapping x = a drawn shadow → keep one.
+// Pure geometry, no AI. Generalizes to any shadowed PDF.
+export interface Run {
+  str: string
+  x: number
+  width: number
+  height?: number
+}
+export function collapseShadows<T extends Run>(runs: T[]): T[] {
+  const placed: T[] = []
+  for (const r of [...runs].sort((a, b) => a.x - b.x)) {
+    const isShadow = placed.some(
+      (p) => p.str === r.str && Math.abs(p.x - r.x) < Math.max(p.width, r.width) * 0.6
+    )
+    if (!isShadow) placed.push(r)
+  }
+  return placed
+}
+
 // ---- extraction (pdfjs, geometry-aware spacing) ----
 export async function extractLines(data: Uint8Array): Promise<Line[]> {
   const doc = await getDocument({ data, isEvalSupported: false, useSystemFonts: false }).promise
@@ -50,26 +71,29 @@ export async function extractLines(data: Uint8Array): Promise<Line[]> {
     const pageLines = [...byY.entries()]
       .sort((a, b) => b[0] - a[0]) // top → bottom
       .map(([y, items]) => {
-        items.sort((a, b) => a.transform[4] - b.transform[4])
+        const runs = items.map((it) => ({
+          str: it.str,
+          x: it.transform[4],
+          width: it.width || 0,
+          height: Math.abs(it.transform[3]) || it.height || 10,
+        }))
+        const kept = collapseShadows(runs) // drop overlapping shadow copies, sorted by x
         let text = ''
         let prevEnd: number | null = null
         let fontH = 0
-        for (const it of items) {
-          const x = it.transform[4]
-          const w = it.width || 0
-          const h = Math.abs(it.transform[3]) || it.height || 10
-          fontH = Math.max(fontH, h)
+        for (const r of kept) {
+          fontH = Math.max(fontH, r.height)
           if (prevEnd !== null) {
-            const gap = x - prevEnd
-            // insert a space only on a real horizontal gap — avoids "Commit"+"tee" → "Commit tee"
-            if (gap > h * 0.25 && !text.endsWith(' ') && !it.str.startsWith(' ')) text += ' '
+            const gap = r.x - prevEnd
+            // space only on a real horizontal gap — avoids "Commit"+"tee" → "Commit tee"
+            if (gap > r.height * 0.25 && !text.endsWith(' ') && !r.str.startsWith(' ')) text += ' '
           }
-          text += it.str
-          prevEnd = x + w
+          text += r.str
+          prevEnd = r.x + r.width
         }
         return {
           text: text.replace(/\s+/g, ' ').trim(),
-          x: items[0].transform[4],
+          x: kept[0]?.x ?? 0,
           y: (doc.numPages - p) * BIG + y, // global reading order
           height: fontH,
         }

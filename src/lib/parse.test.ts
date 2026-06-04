@@ -1,8 +1,34 @@
 import { describe, it, expect } from 'vitest'
-import { dedup, recoverBlocks, detectImmutables, type Line } from './parse'
+import { dedup, recoverBlocks, detectImmutables, collapseShadows, type Line } from './parse'
 
 // y decreases in reading order (top of page first)
 const L = (text: string, y: number, height = 12, x = 60): Line => ({ text, x, y, height })
+
+describe('collapseShadows', () => {
+  it('collapses same text drawn at overlapping x (shadow copies) to one', () => {
+    const runs = [
+      { str: 'Statement of', x: 125, width: 300 },
+      { str: 'Statement of', x: 127, width: 300 },
+      { str: 'Statement of', x: 123, width: 300 },
+    ]
+    expect(collapseShadows(runs).map((r) => r.str)).toEqual(['Statement of'])
+  })
+  it('keeps the same text when it is genuinely spaced apart (not a shadow)', () => {
+    const runs = [
+      { str: 'Land', x: 76, width: 30 },
+      { str: 'Land', x: 301, width: 30 }, // a real second column, far away
+    ]
+    expect(collapseShadows(runs)).toHaveLength(2)
+  })
+  it('keeps distinct adjacent words', () => {
+    const runs = [
+      { str: 'Who We', x: 82, width: 100 },
+      { str: 'Who We', x: 84, width: 100 }, // shadow
+      { str: 'Are', x: 200, width: 50 },
+    ]
+    expect(collapseShadows(runs).map((r) => r.str)).toEqual(['Who We', 'Are'])
+  })
+})
 
 describe('dedup', () => {
   it('removes shadow-layered duplicate lines at near-same y', () => {
