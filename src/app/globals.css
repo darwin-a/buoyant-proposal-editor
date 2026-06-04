@@ -1,45 +1,41 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* Buoyant brand tokens (from trybuoyant.ai): navy + periwinkle on a light blue-grey canvas. */
+@theme {
+  --color-canvas: hsl(223 33% 96%);
+  --color-card: hsl(0 0% 100%);
+  --color-ink: hsl(221 35% 21%);
+  --color-navy: hsl(224 41% 31%);
+  --color-navy-700: hsl(224 45% 21%);
+  --color-periwinkle: hsl(221 57% 63%);
+  --color-periwinkle-soft: hsl(221 57% 95%);
+  --color-mute: hsl(219 18% 45%);
+  --color-line: hsl(221 24% 87%);
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
 }
 
-/* TipTap document editor — editorial look: sans headings, serif body */
+/* TipTap document editor — sans headings, serif body for the formal-proposal feel */
 .doc-editor:focus,
 .doc-editor:focus-visible {
   outline: none;
 }
 .doc-editor {
   font-family: Georgia, "Times New Roman", serif;
-  color: #1f2937;
+  color: hsl(221 35% 25%);
 }
 .doc-editor h1,
 .doc-editor h2,
 .doc-editor h3 {
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-family: var(--font-sans);
   font-weight: 600;
-  color: #111827;
+  color: hsl(224 45% 18%);
   letter-spacing: -0.01em;
   line-height: 1.25;
 }
@@ -56,8 +52,8 @@ body {
   font-size: 0.8rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #6b7280;
+  letter-spacing: 0.08em;
+  color: hsl(221 57% 55%);
   margin-top: 2rem;
 }
 .doc-editor p {

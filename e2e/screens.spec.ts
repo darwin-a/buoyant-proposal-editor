@@ -7,7 +7,7 @@ test.use({ viewport: { width: 1280, height: 900 } })
 test('capture key screens', async ({ page }) => {
   // 1. login
   await page.goto('/login')
-  await page.waitForSelector('text=Proposal Editor')
+  await page.waitForSelector('text=Welcome to Buoyant')
   await page.screenshot({ path: 'e2e/screenshots/01-login.png' })
 
   // 2. home (signed in — upload + recent proposals)

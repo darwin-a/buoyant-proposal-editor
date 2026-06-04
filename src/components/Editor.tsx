@@ -132,19 +132,19 @@ export function Editor({
 
   return (
     <div className="min-w-0">
-      <div className="mb-8 flex items-center justify-between border-b border-gray-100 pb-3">
-        <span className="text-xs text-gray-400">{label}</span>
+      <div className="mb-8 flex items-center justify-between border-b border-line pb-3">
+        <span className="text-xs text-mute">{label}</span>
         <button
           onClick={save}
           disabled={status !== 'dirty'}
-          className="rounded-md bg-gray-900 px-3 py-1.5 text-xs font-medium text-white transition disabled:opacity-25"
+          className="rounded-md bg-navy px-3 py-1.5 text-xs font-medium text-white transition hover:bg-navy-700 disabled:opacity-25"
         >
           Save
         </button>
       </div>
 
       <EditorContent editor={editor} />
-      <p className="mt-6 text-xs text-gray-300">Tip: highlight any text to edit it with AI.</p>
+      <p className="mt-6 text-xs text-mute/70">Tip: highlight any text to edit it with AI.</p>
 
       {/* floating ✨ trigger at the selection */}
       {phase === 'closed' && sel && (
@@ -152,7 +152,7 @@ export function Editor({
           <button
             onMouseDown={(e) => e.preventDefault()} // keep the editor selection
             onClick={askAi}
-            className="rounded-full bg-gray-900 px-3 py-1.5 text-xs font-medium text-white shadow-lg hover:bg-gray-700"
+            className="rounded-full bg-navy px-3 py-1.5 text-xs font-medium text-white shadow-lg transition hover:bg-navy-700"
           >
             ✨ Ask AI
           </button>
@@ -163,9 +163,9 @@ export function Editor({
       {phase !== 'closed' && target && (
         <div
           style={{ position: 'fixed', top: clampTop(target.top + 24), left: clampLeft(target.left), zIndex: 30 }}
-          className="w-[26rem] rounded-xl border border-gray-200 bg-white p-3 shadow-2xl"
+          className="w-[26rem] rounded-xl border border-line bg-card p-3 shadow-2xl"
         >
-          <div className="mb-2 text-[11px] text-gray-400">
+          <div className="mb-2 text-[11px] text-mute">
             Editing “{target.text.slice(0, 70)}{target.text.length > 70 ? '…' : ''}”
           </div>
 
@@ -180,16 +180,16 @@ export function Editor({
                   if (e.key === 'Escape') close()
                 }}
                 placeholder="Tell the AI what to change…"
-                className="flex-1 rounded border border-gray-300 px-2 py-1.5 text-sm outline-none focus:border-gray-900"
+                className="flex-1 rounded border border-line px-2 py-1.5 text-sm outline-none transition focus:border-periwinkle"
               />
-              <button onClick={propose} disabled={!instruction.trim()} className="rounded bg-gray-900 px-3 py-1.5 text-sm text-white disabled:opacity-30">
+              <button onClick={propose} disabled={!instruction.trim()} className="rounded bg-navy px-3 py-1.5 text-sm text-white transition hover:bg-navy-700 disabled:opacity-30">
                 Propose
               </button>
-              <button onClick={close} className="px-1 text-sm text-gray-400">✕</button>
+              <button onClick={close} className="px-1 text-sm text-mute">✕</button>
             </div>
           )}
 
-          {phase === 'proposing' && <p className="py-1 text-sm text-gray-500">Proposing…</p>}
+          {phase === 'proposing' && <p className="py-1 text-sm text-mute">Proposing…</p>}
 
           {phase === 'diff' && proposed && (() => {
             const violations = findLockedViolations(target.text, proposed.proposedText, lockedFields, proposed.changedEntities)
