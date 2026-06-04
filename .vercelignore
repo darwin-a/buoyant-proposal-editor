@@ -1,0 +1,22 @@
+# NOTE: when this file exists, Vercel ignores .gitignore — so list EVERYTHING
+# that must not upload, including the usual rebuild-from-source artifacts.
+
+# rebuilt fresh on Vercel — never upload
+node_modules
+.next
+.git
+.vercel
+
+# secrets — env comes from Vercel's env store, not uploaded files
+.env
+.env.*
+
+# proprietary take-home materials — must never leave this machine
+docs
+
+# dev-only tooling, not needed for the build
+e2e
+test-results
+playwright-report
+scripts
+*.log

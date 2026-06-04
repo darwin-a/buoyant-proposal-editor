@@ -54,7 +54,7 @@ export function collapseShadows<T extends Run>(runs: T[]): T[] {
 
 // ---- extraction (pdfjs, geometry-aware spacing) ----
 export async function extractLines(data: Uint8Array): Promise<Line[]> {
-  const doc = await getDocument({ data, isEvalSupported: false, useSystemFonts: false }).promise
+  const doc = await getDocument({ data, useSystemFonts: false }).promise
   const BIG = 1_000_000
   const out: Line[] = []
   for (let p = 1; p <= doc.numPages; p++) {
