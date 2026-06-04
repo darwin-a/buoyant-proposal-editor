@@ -24,9 +24,9 @@ export class MockParseEnhancer implements ParseEnhancer {
 export class ProxyParseEnhancer implements ParseEnhancer {
   private client: Anthropic
   private model: string
-  constructor(token: string, model = process.env.BUOYANT_MODEL ?? 'claude-sonnet-4-6') {
-    this.client = new Anthropic({ apiKey: token, baseURL: 'https://hiring-proxy.trybuoyant.ai/anthropic' })
-    this.model = model
+  constructor(token: string, opts: { baseURL?: string; model?: string } = {}) {
+    this.client = new Anthropic({ apiKey: token, ...(opts.baseURL ? { baseURL: opts.baseURL } : {}) })
+    this.model = opts.model ?? process.env.BUOYANT_MODEL ?? 'claude-sonnet-4-6'
   }
   async enhance(parsed: ParsedDoc): Promise<EnhanceResult> {
     const text = parsed.blocks.map((b) => b.text).join('\n')
@@ -55,7 +55,12 @@ export class ProxyParseEnhancer implements ParseEnhancer {
   }
 }
 
+// Mock by default; opt into real Claude with USE_REAL_AI=true.
 export function getParseEnhancer(): ParseEnhancer {
-  const token = process.env.BUOYANT_PROXY_TOKEN
-  return token ? new ProxyParseEnhancer(token) : new MockParseEnhancer()
+  if (process.env.USE_REAL_AI !== 'true' && process.env.USE_REAL_AI !== '1') return new MockParseEnhancer()
+  const own = process.env.ANTHROPIC_API_KEY
+  if (own) return new ProxyParseEnhancer(own)
+  const proxy = process.env.BUOYANT_PROXY_TOKEN
+  if (proxy) return new ProxyParseEnhancer(proxy, { baseURL: 'https://hiring-proxy.trybuoyant.ai/anthropic' })
+  return new MockParseEnhancer()
 }

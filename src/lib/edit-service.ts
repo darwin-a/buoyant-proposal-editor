@@ -67,9 +67,9 @@ export class MockEditService implements EditService {
 export class ProxyEditService implements EditService {
   private client: Anthropic
   private model: string
-  constructor(token: string, model = process.env.BUOYANT_MODEL ?? 'claude-sonnet-4-6') {
-    this.client = new Anthropic({ apiKey: token, baseURL: 'https://hiring-proxy.trybuoyant.ai/anthropic' })
-    this.model = model
+  constructor(token: string, opts: { baseURL?: string; model?: string } = {}) {
+    this.client = new Anthropic({ apiKey: token, ...(opts.baseURL ? { baseURL: opts.baseURL } : {}) })
+    this.model = opts.model ?? process.env.BUOYANT_MODEL ?? 'claude-sonnet-4-6'
   }
   async proposeEdit({ blockText, instruction }: EditRequest): Promise<EditResponse> {
     const msg = await this.client.messages.create({
@@ -95,8 +95,15 @@ export class ProxyEditService implements EditService {
   }
 }
 
-// Picks Proxy when the token is present, else the deterministic Mock. One-line swap.
+const PROXY_BASE = 'https://hiring-proxy.trybuoyant.ai/anthropic'
+
+// MOCK BY DEFAULT — even with a token in .env — so there is no accidental spend.
+// Opt into real Claude explicitly with USE_REAL_AI=true (for demo / submission).
 export function getEditService(): EditService {
-  const token = process.env.BUOYANT_PROXY_TOKEN
-  return token ? new ProxyEditService(token) : new MockEditService()
+  if (process.env.USE_REAL_AI !== 'true' && process.env.USE_REAL_AI !== '1') return new MockEditService()
+  const own = process.env.ANTHROPIC_API_KEY
+  if (own) return new ProxyEditService(own) // your key → api.anthropic.com
+  const proxy = process.env.BUOYANT_PROXY_TOKEN
+  if (proxy) return new ProxyEditService(proxy, { baseURL: PROXY_BASE })
+  return new MockEditService()
 }
