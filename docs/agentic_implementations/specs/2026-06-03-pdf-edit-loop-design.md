@@ -21,11 +21,14 @@ export, and multi-paragraph chat remain later/stretch.
   a structured `DocumentModel` and render *that* as clean editable blocks, not
   the original pixels. The brief permits dropping visual fidelity. This makes
   selection, applying edits, composition, and undo trivial.
-- **Parsing — hybrid.** Deterministic extraction (`pdfjs-dist`) + heuristic
-  segmentation is the always-works baseline (no token, sub-second on easy.pdf).
-  An *optional* LLM cleanup pass (merge broken lines, label headings) is a
-  quality upgrade, **cached to disk by file SHA-256** so it runs at most once
-  per file. Loop works today without it.
+- **Parsing — pure JS, our own structure recovery + AI fallback (decided).** `pdfjs`
+  extracts text + geometry; we recover structure *ourselves* in TS: **dedup** the
+  shadow-layered text, detect **headings by bold + brevity** (not font size — the real
+  fixture lesson), join lines into paragraphs, type the blocks → a markdown-shaped
+  `Block[]`. **AI-via-proxy is the fallback** for PDFs the deterministic path mangles
+  (covers the unseen grading fixture, C7). **Cached** by file SHA-256 (+ a parser-version
+  key). Hand-rolling this is deliberate — it shows our approach to the structure-recovery
+  problem the brief highlights, instead of hiding it behind a library.
 - **AI seam.** All model calls sit behind an `EditService` interface.
   `MockEditService` (deterministic, token-free) ships now; `ProxyEditService`
   (Anthropic SDK → `https://hiring-proxy.trybuoyant.ai/anthropic`) drops in via
@@ -37,13 +40,13 @@ export, and multi-paragraph chat remain later/stretch.
   full-stack app — Next.js frontend + our own backend (API routes) + a **local
   database** — and run it locally. *Deployment/host is deferred and ignored for now.*
   The backend is thin and hand-built: it stores proposals, collaborators, and the edit
-  log, and serves the edit loop. Local DB = a simple SQL store (e.g. SQLite via an ORM);
-  swapping it for a hosted Postgres later is a late-binding, one-line change.
+  log, and serves the edit loop. Local DB = **PostgreSQL via Prisma**, **containerized**
+  (`docker-compose` runs the app + Postgres) so local matches prod.
 - **Stack.** Next.js (App Router) + TypeScript · Tailwind · `diff` (word-level) ·
-  `@anthropic-ai/sdk` (later). PDF→structure parse: TBD (see *Parsing research*).
-- **Deployment + DB vendor — DEFERRED (late-binding).** The design only assumes
-  "some persistence" for collaboration; *which* host/DB (any serverless Postgres) is a
-  decision we make at the end. Not thinking about it now.
+  `@anthropic-ai/sdk` (later) · **PostgreSQL + Prisma** · **Docker** (`docker-compose`) ·
+  `pdfjs-dist` (parse). PDF→blocks: pure-JS recovery + AI-via-proxy fallback (decided).
+- **Cloud host — still deferred.** Engine is Postgres now (not vendor-locked); *where* it
+  deploys is a late-binding call. App + DB run locally via Docker until then.
 
 ## Architecture
 
@@ -62,24 +65,49 @@ Server (route handlers)
                         → { proposedText }
 ```
 
-## Data model
+## Data model (settled — DB vendor still deferred)
+
+The core single-player loop needs **none** of this (client state + parse cache). The DB
+enters only with persistence + collaboration.
 
 ```ts
-DocumentModel { id: string; title: string; blocks: Block[] }
+// Persisted entities. Blocks live inside the Proposal as JSON (no separate Block table).
+User { id: string; name: string; email: string; role: 'coordinator' | 'principal' | 'engineer' }
+Proposal {
+  id: string; title: string; sourceFilename: string;
+  document: Block[];          // ordered blocks from the markdown parse
+  createdById: string;        // FK → User (attribution; every firm user can open any proposal)
+  reviewRequestedFrom?: string; // FK → User (light "request review from X" — not access control)
+  lockedFields: { label: string; value: string }[]; // immutable facts — deterministic-detected, user-confirmed
+  createdAt: number;
+}
 Block { id: string; type: 'heading' | 'paragraph' | 'list'; text: string; level?: number }
-EditOp { id: string; blockId: string; before: string; after: string;
-         instruction: string; appliedAt: number }
+
+// ONE table doubles as the edit log AND the review queue.
+Edit {
+  id: string; proposalId: string; blockId: string;
+  authorId: string;           // FK → User (real login)
+  kind: 'manual' | 'ai';
+  instruction?: string;       // ai only
+  before: string; after: string;
+  rationale?: string; changedEntities?: string[];   // ai trust signals (faithfulness)
+  status: 'applied' | 'pending' | 'approved' | 'rejected';
+  reviewedBy?: string; reviewedAt?: number;          // approval trail
+  createdAt: number;
+}
 ```
 
-- Blocks carry **stable ids**; every edit/diff/undo addresses a block by id.
-- History is a stack of `EditOp`. Apply pushes; undo pops and restores `before`.
-- Composition is automatic: each apply mutates exactly one block.
-
-> **Revised by collaboration:** in the loop-only v1, `EditOp` lives in client state.
-> Once collaboration lands, the proposed edit becomes a **persisted, authored** record
-> (`author`, `status`, AI rationale) in our own minimal store so teammates can
-> review/approve. The block model is unchanged; only where edits live and who can act
-> on them changes. Final data model + store choice is its own design problem.
+- **Real login over a seeded `User` table:** sign in by email; edits/reviews are
+  attributed to your user. Lets us demo the review flow by switching coordinator ↔ principal.
+- **Blocks carry stable ids**; every edit/diff/undo/review addresses a block by id.
+- **Manual edits apply immediately** (`status: 'applied'`); the author may also apply their
+  own AI edits directly.
+- **Review = live edits + sign-off (Model A, decided):** edits apply immediately
+  (`status: 'applied'`); a reviewer then `approve`s (✓ sign-off) or `reject`s (flags for
+  revision — *no* auto-revert of mid-history edits) each edit. `Proposal.reviewRequestedFrom`
+  kicks off a review. Status flow `applied → approved | rejected`; `pending` is reserved for
+  a future suggestion-mode. `reviewedBy`/`reviewedAt` form the approval trail.
+- **Undo** reverses the last applied edit (reads the log).
 
 ## The edit loop (UX)
 
@@ -135,10 +163,25 @@ approves" is a natural differentiator (G3, D3.6).
   through **review** — not character-level co-typing. So we get the collaborative feel
   from section-parallel work + review, not from CRDT.
 
-**Identity — keep it simple, ourselves.** A **shareable link** (coordinator shares a
-proposal; the principal opens it, enters a name) — no accounts, no email provider, no
-BaaS. Identity = the name on the link. (Full magic-link auth is a later upgrade, not
-needed for a two-person SOQ review.)
+**Identity — real login over a seeded `User` table (built ourselves).** We seed the DB
+with the firm's actual team (real MECO names from the proposals). You **sign in by email**;
+edits and reviews are attributed to your user. Simple to build, no BaaS, and it lets us
+demo the review flow by switching between a coordinator and a principal. (Passwords / OAuth
+are later polish — email-match sign-in is enough for the demo.)
+
+**Seed users** (from the real MECO proposals; email domain `mecoengineering.com` is the
+one printed in the Dixon SOQ):
+
+| name | email | role |
+|------|-------|------|
+| Sarah Mills | smills@mecoengineering.com | coordinator (drafts/recycles) |
+| Donald Jenkins | djenkins@mecoengineering.com | principal (VP/PM — the real Dixon signer; approves) |
+| Scott Vogler | svogler@mecoengineering.com | principal (President; approves) |
+| David Uhlig | duhlig@mecoengineering.com | engineer (verifies technical sections) |
+| Kevin Garnett | kgarnett@mecoengineering.com | engineer (contributor) |
+
+*Sarah Mills is invented (no marketing coordinator is named in the SOQs); the rest are real
+team members. `djenkins@mecoengineering.com` is literally printed in the Dixon proposal.*
 
 **Persistence — minimal, self-built (NOT Supabase).** The core loop ships
 backend-free. Collaboration needs *some* shared store so two people see one proposal;
@@ -163,7 +206,24 @@ original · full account auth (shareable link instead) · live presence/cursors 
 50-person multiplayer bid war room (wrong document/customer). Named as stretch/cut so
 the loop closes first.
 
-## Failure modes to watch (for the README eval section later)
+## Evaluation (D3.5) — decided: name/entity fidelity
+
+Do edits preserve protected facts unless explicitly asked to change them? A failure =
+an edit silently altered a protected entity.
+
+- **Protected entities (gold list, from the corpus):** client (City of Dixon), mayor
+  (Mary Wiles), firm (MECO), project no. (041-560), PE names + license numbers, and key
+  figures (40th anniversary, 60 professionals, seven offices, 55 miles).
+- **Test set:** "preserve-everything" instructions (tighten / rewrite / more formal) over
+  blocks that contain those entities.
+- **Scoring (independent — NOT self-report):** extract gold entities from `before`, assert
+  each still appears in `after`. Fidelity = % preserved; list every failure. (`changedEntities`
+  from the EditService is only a hint; the harness checks the actual text.)
+- **README number:** e.g. "96% — 48/50 entities preserved across 20 edits; 2 failures: …"
+- **Runs on the mock now** (deterministic → instant real numbers) and **re-runs on the proxy
+  later** (real LLM numbers) via the same harness. Closes the brief's "measure X → here's X."
+
+## Failure modes to watch (README §4)
 
 - Segmentation splits/merges paragraphs wrongly → edits target the wrong unit.
 - AI silently changes a name or number the user didn't ask to change (faithfulness).

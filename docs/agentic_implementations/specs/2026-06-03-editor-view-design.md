@@ -140,8 +140,13 @@ Lives in the right rail + light in-block cues:
 - [ ] Quick-action chips: **deferred** — starting basic with just a free-text box.
       Revisit later which 3–4 intents to add (Tighten / Fix a name / Our voice / Formal).
 - [ ] Rationale line: always shown, or on-hover/expand?
-- [ ] Faithfulness guard: if a proposed edit changes a name/number not mentioned in the
-      instruction, warn inline? (Strong trust touch; ties to eval.)
+- [x] **Locked immutable fields (decided — upgrades the faithfulness guard):**
+      *deterministically* (no AI) detect candidate immutables at parse (project no., client,
+      recipient, dates, PE licenses, firm name); user **confirms/edits the lock list** in a
+      post-parse panel (and can lock more later). Protection is **value-level** — a locked
+      string is guarded wherever it appears, incl. inside prose. Any edit (AI or manual) that
+      changes a locked value **warns inline; override allowed**. The lock list *is* the eval's
+      gold list. *Why: a wrong client name loses the contract — worth the small confirm step.*
 - [ ] Lists & records (SERVICES, team bios): editable as one block, or item-level?
 - [ ] Selection affordance: whole-block click vs. an explicit ✎ button?
 - [ ] Multiple blocks selected / multi-paragraph instruction — in scope here or later?
