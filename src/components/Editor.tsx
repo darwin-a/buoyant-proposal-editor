@@ -55,15 +55,15 @@ export function Editor({ proposalId, blocks }: { proposalId: string; blocks: Blo
 
   return (
     <div className="min-w-0">
-      <div className="mb-4 flex items-center gap-3">
+      <div className="mb-8 flex items-center justify-between border-b border-gray-100 pb-3">
+        <span className="text-xs text-gray-400">{label}</span>
         <button
           onClick={save}
           disabled={status !== 'dirty'}
-          className="rounded bg-gray-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-30"
+          className="rounded-md bg-gray-900 px-3 py-1.5 text-xs font-medium text-white transition disabled:opacity-25"
         >
           Save
         </button>
-        <span className="text-xs text-gray-400">{label}</span>
       </div>
       <EditorContent editor={editor} />
     </div>
