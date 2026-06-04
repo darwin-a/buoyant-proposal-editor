@@ -11,6 +11,9 @@ const roleStyle: Record<string, string> = {
   ENGINEER: 'bg-slate-100 text-slate-600',
 }
 
+const initials = (name: string) =>
+  name.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()
+
 export function LoginForm({ users }: { users: SeedUser[] }) {
   const [email, setEmail] = useState('')
   const [error, setError] = useState('')
@@ -72,13 +75,18 @@ export function LoginForm({ users }: { users: SeedUser[] }) {
               key={u.email}
               onClick={() => signIn(u.email)}
               disabled={loading}
-              className="flex w-full items-center justify-between rounded-lg border border-line px-3 py-2 text-left text-sm transition hover:border-periwinkle hover:bg-canvas disabled:opacity-40"
+              className="flex w-full items-center justify-between gap-2 rounded-lg border border-line px-2.5 py-2 text-left transition hover:border-periwinkle hover:bg-canvas disabled:opacity-40"
             >
-              <span>
-                <span className="font-medium text-ink">{u.name}</span>
-                <span className="ml-2 text-mute">{u.email}</span>
+              <span className="flex min-w-0 items-center gap-2.5">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-periwinkle-soft text-[11px] font-semibold text-navy">
+                  {initials(u.name)}
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium text-ink">{u.name}</span>
+                  <span className="block truncate text-[11px] text-mute">{u.email}</span>
+                </span>
               </span>
-              <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${roleStyle[u.role] ?? 'bg-slate-100 text-slate-600'}`}>
+              <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${roleStyle[u.role] ?? 'bg-slate-100 text-slate-600'}`}>
                 {u.role.toLowerCase()}
               </span>
             </button>
