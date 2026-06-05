@@ -1,13 +1,19 @@
 # Buoyant — AI Proposal Editor
 
-Upload a civil-engineering proposal PDF, recover its structure, and edit it section-by-section
-with AI — see a diff, apply it, compose multiple edits, undo. Grounded in the firm's past work.
+Upload a civil-engineering proposal PDF, recover its structure, and edit it section by section
+with AI. You see the proposed change as a diff, decide whether to apply it, stack multiple edits,
+and undo. Edits can be grounded in the firm's past proposals.
 
 **Live:** https://darwinagunos-buoyant.vercel.app
 **Demo login:** passwordless — pick any seeded account (e.g. `darwin@mecoengineering.com`).
 
-The core loop closes end-to-end on the deployed app: **upload → recover paragraphs → select one →
-instruct the AI → review the diff → apply → (repeat / undo).**
+The loop runs end to end on the deployed app: upload → recover paragraphs → select one →
+tell the AI what to do → review the diff → apply → repeat or undo.
+
+My take on this project up front: technology isn't the moat here. You can't be stupid about it —
+the engineering has to be solid — but the hard part is the design. Understanding what the firm and
+the person writing the proposal actually need is where the value is, and it's where I spent most of
+my time.
 
 ---
 
@@ -31,18 +37,19 @@ pnpm dev                                    # http://localhost:3005
 
 Open http://localhost:3005, sign in with a seeded email, upload a PDF, and edit.
 
-**AI mode.** The editor defaults to a **deterministic, token-free editor** (`MockEditService`) so the
-loop is fully usable with zero API spend. To use real Claude via the Buoyant proxy, set
-`USE_REAL_AI=true` and `BUOYANT_PROXY_TOKEN=...` in `.env`. (See §2 for why this is the default.)
+**AI mode.** The deployed demo runs real Claude (`claude-sonnet-4-6`) through the Buoyant proxy.
+To run real AI locally, set `USE_REAL_AI=true` and `BUOYANT_PROXY_TOKEN=...` in `.env`. Without a
+token, the app falls back to a deterministic editor so the loop still works offline and in tests —
+see §2.
 
-> **On the example fixtures.** MECO's proposals are proprietary and are **not** committed to this
+> **On the example fixtures.** MECO's proposals are proprietary, so they're not committed to this
 > repo. `pnpm db:seed` creates the demo users; the knowledge-base and sample-proposal seeds
-> (`scripts/seed-kb.ts`, `scripts/seed-proposals.ts`) require the fixture PDFs locally. Without them,
-> the app works exactly the same — just **upload any PDF** to start.
+> (`scripts/seed-kb.ts`, `scripts/seed-proposals.ts`) need the fixture PDFs locally. Without them the
+> app works the same — just upload any PDF to start.
 
 ```bash
 pnpm test            # unit tests (parser, locked-fields, edit service)
-pnpm test:e2e        # Playwright (the edit loop + locked-field guard)
+pnpm test:e2e        # Playwright — the edit loop + upload + locked-field guard
 pnpm eval            # name-fidelity eval (§5)
 ```
 
@@ -50,93 +57,107 @@ pnpm eval            # name-fidelity eval (§5)
 
 ## 2. Design decisions
 
-### PDF representation — recover structure, don't reproduce pixels
-PDFs expose glyphs at coordinates, not paragraphs. The brief is explicit that **the core problem is
-the edit loop, not PDF reconstruction**, so I recover a clean editable *structure* rather than chase
-visual fidelity.
+### Parsing the PDF
+I parse the PDF with deterministic rules — pdfjs for the text geometry, regex for the structure —
+instead of handing it to an LLM. PDF parsing isn't an unsolved problem, and I wanted to save tokens
+wherever I could, so I only reach for the model when it's the only thing that can do the job.
 
-`src/lib/parse.ts` is a **deterministic, geometry-aware parser** (pdfjs + rules, no LLM):
-- group glyphs into lines by Y position, infer spacing from X gaps;
-- **dedup "shadow text"** — these PDFs render text twice (a drop-shadow offset), so I drop near-duplicate
-  runs by position rather than by guessing;
-- recover **headings** (ALL-CAPS + short, or large font) and merge wrapped multi-line headings;
-- detect **immutable facts** (client, project no., recipient, dates, PE license, emails, phone) by regex.
+What the parser does (`src/lib/parse.ts`):
+- groups glyphs into lines by their Y position and infers spacing from the X gaps;
+- drops "shadow text" — these PDFs draw each string twice with a small offset for a drop-shadow
+  effect, so I remove the near-duplicate by position instead of guessing;
+- recovers headings (all-caps and short, or larger font) and merges wrapped multi-line headings;
+- detects the facts that must not change (client, project number, recipient, dates, PE license,
+  emails, phone) by regex, and locks them.
 
-The output is an ordered `Block[]` (`heading` / `paragraph`) plus `lockedFields`. Choosing rules over
-an LLM here is deliberate: it's **instant, free, and debuggable** — "these are patterns this firm's
-documents follow," not a model I have to trust. (The brief notes AI parsing can take 5–10 min; this is
-sub-second.)
+The output is an ordered list of blocks (`heading` / `paragraph`) plus the locked fields. The
+tradeoff is honest: this handles a clean single-column SOQ well, and it falls down on multi-column
+pages and other awkward layouts. The brief says the core problem is the edit loop, not PDF
+reconstruction, so I recover a clean editable structure rather than chase visual fidelity.
 
-### Agent design — one paragraph, one change, faithful by default
-`EditService` (`src/lib/edit-service.ts`) is a tiny interface: `proposeEdit({blockText, instruction})`
-→ `{proposedText, rationale, changedEntities}`. Two implementations behind a factory:
+### The AI edit
+`EditService` (`src/lib/edit-service.ts`) is a small interface: given a paragraph and an
+instruction, return the proposed text, a short rationale, and the list of entities the edit
+intentionally changed. There are two implementations behind it:
 
-- **`MockEditService`** — deterministic rules (rename, tighten, formalize, cleanup). Drives the entire
-  loop with **no token and no network**, so the product is demoable and testable independently of the
-  proxy. **This is the default even when a token is present**, so a public URL can't rack up spend.
-- **`ProxyEditService`** — real Claude (`claude-sonnet-4-6`) via the Buoyant proxy, same interface,
-  same JSON contract. The system prompt constrains it to *one paragraph, only the requested change,
-  never touch names/licenses/dates/figures unless asked.*
+- **Real Claude** (`ProxyEditService`) — `claude-sonnet-4-6` via the Buoyant proxy. This is what the
+  deployed app runs. The system prompt keeps it to one paragraph, the requested change only, and not
+  touching names, licenses, dates, or figures unless asked.
+- **A deterministic editor** (`MockEditService`) — rule-based rewrites with no token or network. I
+  started with this to save tokens early on, and it stays useful: it drives the whole loop in tests
+  and powers the eval in §5 without spend. It's a baseline, not the product.
 
-`changedEntities` is the key field: the model declares what it *intentionally* changed, so anything
-else that drifts is a **silent violation** the UI can flag (§locked-field guard).
+The important field is the list of changed entities: the model declares what it meant to change, so
+anything else that drifts is something the UI can catch (the locked-field guard below).
 
-### UX — edit in place, decide before applying
-- **TipTap/ProseMirror** editor; each block carries a `blockId`. Selecting text reveals a floating
-  ✨ trigger (Google-Docs style) → type an instruction → see a **diff** → **Apply** or discard.
-- **Multiple edits compose**; the editor's history gives **undo** (⌘Z) for free.
-- **Locked-facts rail** shows the protected facts live; if an edit would change one, it's flagged
-  **amber (intentional)** vs **red (collateral)** in the diff *and* the rail updates — so name drift is
-  visible the moment it happens, not after submission.
-- **Knowledge base** (`/kb`): the firm's 5 past proposals, browsable and readable as the **original PDF**
-  (served behind login), so edits can be grounded in real past work.
+### UX
+- A TipTap/ProseMirror editor where each block has an ID. Select text and a floating trigger appears
+  (Google-Docs style) → type an instruction → see a diff → apply or discard.
+- Edits stack, and the editor's history gives undo (⌘Z).
+- A locked-facts panel shows the protected facts live. If an edit would change one, it's flagged in
+  the diff — amber if you asked for it, red if it's collateral — so a name change is visible the
+  moment it happens, not after you've submitted.
+- A knowledge base (`/kb`): the firm's five past proposals, browsable and readable as the original
+  PDF behind login, so edits can be grounded in real past work.
 
-### Database — Postgres + Prisma
-Optional per the brief, but it earns its place: proposals, their edit history, users/roles
-(principal / engineer / coordinator), and the KB corpus all persist. It also enables the
-collaboration framing (a coordinator drafts, a PE reviews) that fits how these firms actually work.
+### Database
+Optional per the brief, but I used Postgres + Prisma because proposals, their edit history, users
+and roles, and the KB corpus all need to persist. It also supports the way these firms actually work
+— a coordinator drafts, a licensed PE reviews and signs off.
+
+### Uploads on a serverless host
+Parsing runs in the browser, and only the recovered structure (a few KB of JSON) is posted to the
+server. The fixtures are 13–18 MB, and Vercel rejects request bodies over 4.5 MB at the edge, so a
+server-side parse would have failed on exactly the files this is meant to handle. Parsing client-side
+sidesteps that limit entirely and is faster too. The server validates the JSON before saving it.
 
 ---
 
-## 3. What I cut and why
+## 3. What I cut, and why
 
-- **Visual PDF fidelity / reconstruction.** Explicitly out of scope per the brief; commercial-grade and
-  not where the value is. I recover *structure*, not layout.
-- **KB *grounding into edits* (RAG).** The KB is browsable/readable, but the AI doesn't yet retrieve from
-  it ("add a paragraph about a similar project"). It's the highest-value next step (§7), but real
-  retrieval done well is more than the remaining budget — a shallow version would've been worse than none.
-- **Multi-paragraph chat.** Significantly harder (cross-block coordination, conflicting edits); the
-  per-paragraph loop is the bar and where I invested.
-- **Export back to PDF.** The edited document lives as structured blocks; re-rendering to PDF is a
-  separate problem with little marginal user value for the demo.
-- **The hard fixture (tables / multi-column).** The parser targets `easy.pdf`'s single column; multi-column
-  reading-order is its own project. I designed to *degrade*, not to handle it.
-- **Real auth.** Passwordless demo login — the interesting problem is the edit loop, not credentials.
+I had roughly four focused hours, so I scoped hard and kept the loop closing over adding features.
+
+- **Grounding edits in the KB (RAG).** The biggest cut. You can browse and read the past proposals,
+  but the AI doesn't yet pull from them into an edit ("add a paragraph about a similar bridge
+  project"). It was out of scope for the time I had, and a shallow version would've been worse than
+  none — retrieval that quietly grabs the wrong precedent is its own failure. It's my #1 next step.
+- **Multi-paragraph edits.** One instruction spanning several blocks is a lot harder (coordinating
+  and reconciling changes across blocks). The per-paragraph loop is the bar, so that's where I spent
+  the time.
+- **Export back to PDF.** The edited document lives as structured blocks. Re-rendering to a PDF is a
+  separate problem and I'd want to do it properly (see §7).
+- **The hard fixture.** The parser targets a single-column SOQ. Multi-column reading order and tables
+  are their own project, so I designed it to degrade rather than pretend to handle them.
+- **Real auth.** Passwordless demo login. The interesting problem here is the edit loop, not credentials.
 
 ## 4. Failure modes I worried about
 
-- **Silent parse failures.** The riskiest class — a heading mis-detected as prose, shadow-text not fully
-  deduped, or multi-column text interleaved. These don't error; they just produce a subtly wrong document.
-  *Before a paying customer:* a parse-confidence signal + a "does this look right?" review step on import.
+- **The nondeterministic AI path is the one that worries me most.** In this domain a rewrite is
+  costly — a wrong name, a wrong project number, or a malformed section can get an SOQ thrown out
+  before anyone reads the substance. So the guardrails have to be good enough to surface the changes
+  that would do that, and realistically most proposals should stay human-in-the-loop. I'm not trying
+  to automate the engineer out; I'm trying to make the expensive mistakes visible before they ship.
+- **Silent parse failures.** A heading read as prose, shadow text not fully removed, or multi-column
+  text interleaved. These don't error — they produce a subtly wrong document. Before a paying
+  customer I'd add a parse-confidence signal and a "does this look right?" review step on import.
 - **Collateral fact changes.** An AI edit that drifts a client name or license number while doing
-  something else. Mitigated by `changedEntities` + the locked-field guard, but it depends on the model
-  *declaring* changes honestly — I'd add an independent post-edit diff check on protected entities.
-- **Strict vs. semantic fact matching.** The guard matches facts *verbatim*; the eval (§5) caught a case
-  where formalizing a salutation reworded a locked phrase and tripped a false-ish positive. Real systems
-  need fuzzy/semantic entity tracking, not substring equality.
-- **AI mode honesty.** The deterministic editor is *not* AI — a demo that silently faked it would be
-  dishonest. The README and UI are explicit about which engine is running.
-- **Serverless edges.** Pooled DB connections under load; large-PDF parse exceeding the function timeout
-  (mitigated: demo data is pre-parsed; live uploads are bounded).
+  something else. The changed-entities field plus the locked-field guard catch this, but they rely on
+  the model declaring its changes honestly. I'd add an independent diff check on the protected
+  entities that doesn't trust the model's own report.
+- **Strict vs. semantic fact matching.** The guard matches facts verbatim. The eval in §5 caught a
+  case where rewording a salutation tripped it even though the name survived — real systems need
+  fuzzy/semantic entity tracking, not substring equality.
 
-## 5. How I'd evaluate this — and what it actually is
+## 5. How I'd evaluate this
 
-**Metric: name/entity fidelity** — across many edits, do protected facts (client, recipient, project no.,
-PE license, dates, emails) survive? In this domain, a silently changed client name is the worst failure,
-so this is the most diagnostic thing to measure. `scripts/eval.ts` runs four "preserve-everything"
-instructions over every fact-bearing paragraph and checks each fact survives.
+The metric I picked is **name/entity fidelity**: across many edits, do the protected facts (client,
+recipient, project number, PE license, dates, emails) survive? I chose this because it ties straight
+to the failure mode above — a silently changed client name is exactly the kind of thing that gets an
+SOQ tossed, so it's the most diagnostic thing to measure. `scripts/eval.ts` runs four
+"preserve everything" instructions over every fact-bearing paragraph and checks each fact survives.
 
-**Run against the shipped editor (`MockEditService`), `easy.pdf`:**
+Run against the deterministic editor on the single-column fixture (the harness is provider-agnostic;
+`USE_REAL_AI=true pnpm eval` runs the same checks against real Claude):
 
 ```
 Edits run:     76   (4 instructions × 19 fact-bearing blocks)
@@ -146,40 +167,39 @@ Fidelity:      99.2%
 Failure (1):   [make this more formal] lost "Mayor Wiles and Selection Committee"
 ```
 
-**What the one failure tells us:** "make this more formal" reworded the salutation
-(*"…and Selection Committee," → "…and Members of the Selection Committee,"*), so the locked recipient
-phrase no longer matched verbatim. The *name* survived; the **verbatim guard was too strict** — a real
-signal that entity tracking should be semantic, not substring (see §4). The harness is
-provider-agnostic (`USE_REAL_AI=true pnpm eval` runs the same checks against real Claude), so the same
-number guards the LLM path before it ships.
+The one failure is instructive: "make this more formal" reworded the salutation, so the locked
+recipient phrase no longer matched verbatim. The name survived — the guard was just too strict. That's
+real signal that entity tracking should be semantic, not substring (§4).
 
-## 6. What I added beyond the brief, and why
+## 6. What I added beyond the brief
 
-- **Knowledge base as a readable corpus.** Browse the firm's 5 past proposals and read the **original
-  PDF** in-app — bytes stored in Postgres and served **behind login** (compressed 69 MB → 14 MB; never
-  in the repo or `/public`, because they're proprietary). Past work is the raw material for grounding.
-- **Live locked-facts guard.** A construction firm's proposals are full of facts that must *never* drift
-  (license numbers, client names). Surfacing them live — and color-coding intentional vs collateral
-  changes in the diff — is the feature I'd want most as a real user.
-- **Deterministic-first AI.** A token-free editor that makes the whole loop demoable, testable, and
-  **free of accidental spend** on a public URL — and doubles as the honest baseline in §5.
-- **Collaboration framing.** Roles (PE / engineer / coordinator) and a review hook, because in these
-  firms a coordinator drafts and a licensed PE signs off.
+- **The KB as a readable corpus.** You can browse the firm's five past proposals and read the
+  original PDF in-app, served behind login (the bytes live in Postgres, compressed 69 MB → 14 MB, and
+  never touch the repo or `/public` because they're proprietary). Past work is the raw material for
+  grounding, so this is also the groundwork for RAG in §7.
+- **The live locked-facts guard.** These proposals are full of facts that can't drift — license
+  numbers, client names. Surfacing them live, and separating an intentional change from a collateral
+  one in the diff, is the thing I'd want most as a real user, and it's the direct answer to the
+  failure mode I care about.
+
+I'd add more given the time — see below.
 
 ## 7. What I'd build next given another 8 hours
 
-1. **KB grounding (RAG).** Retrieve relevant past-proposal passages and let the AI pull from them —
-   "add a paragraph about a similar bridge project" cites a real one. The KB is already structured for it.
-2. **Semantic locked-fact tracking.** Replace verbatim matching with entity-aware checks (the §5 failure).
-3. **Multi-paragraph instructions.** One instruction spanning sections, with per-block diffs.
-4. **Real review/approval workflow.** Draft → request PE review → approve/reject, on the existing roles.
-5. **Hard fixture.** Multi-column reading-order + table handling.
-6. **Export** to PDF/DOCX, and **streaming** AI edits for perceived speed.
+1. **Push the knowledge base into the edits (RAG).** Retrieve relevant passages from the past
+   proposals and let the AI ground a change in them, with a citation back to the source. The KB is
+   already structured for it.
+2. **Approval workflows and comments.** Draft → request a PE review → comment / approve / reject, on
+   the roles that already exist. This is how the firm actually signs off on a proposal.
+3. **Export.** There are a few ways to solve it; I'd look into real PDF editing first rather than
+   re-rendering from scratch.
+4. **Semantic locked-fact tracking** to fix the §5 failure, and **handling the hard fixture**
+   (multi-column reading order + tables).
 
 ---
 
 ## Architecture at a glance
 
-Next.js (App Router) · TypeScript · Prisma + Postgres · TipTap · pdfjs (deterministic parse) ·
-Anthropic SDK via the Buoyant proxy. Deployed on Vercel + Vercel Postgres (Neon).
+Next.js (App Router) · TypeScript · Prisma + Postgres · TipTap · pdfjs (deterministic parse,
+client-side) · Anthropic SDK via the Buoyant proxy. Deployed on Vercel + Vercel Postgres (Neon).
 See `docs/agentic_implementations/` for specs, the implementation plan, and the deploy runbook.
