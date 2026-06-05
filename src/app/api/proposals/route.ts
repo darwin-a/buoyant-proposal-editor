@@ -1,29 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
-import { createProposalFromPdf } from '@/lib/proposals'
+import { createProposalFromParsed } from '@/lib/proposals'
+import { validateParsedDoc } from '@/lib/parse'
 
 export const runtime = 'nodejs'
-export const maxDuration = 60
 
+// The browser parses the PDF and POSTs the resulting blocks as JSON (a few KB), so the
+// raw PDF bytes never reach the server — sidestepping Vercel's 4.5 MB request-body limit.
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Not signed in' }, { status: 401 })
 
-  const form = await req.formData().catch(() => null)
-  const file = form?.get('file')
-  if (!(file instanceof File)) {
-    return NextResponse.json({ error: 'No PDF provided' }, { status: 400 })
-  }
-  if (!file.name.toLowerCase().endsWith('.pdf')) {
-    return NextResponse.json({ error: 'File must be a PDF' }, { status: 400 })
+  const body = await req.json().catch(() => null)
+  const filename = typeof body?.filename === 'string' ? body.filename : 'upload.pdf'
+  const parsed = validateParsedDoc(body?.parsed)
+  if (!parsed) {
+    return NextResponse.json({ error: 'Could not read any text from that PDF' }, { status: 400 })
   }
 
   try {
-    const data = new Uint8Array(await file.arrayBuffer())
-    const proposal = await createProposalFromPdf(data, file.name, user.id)
+    const proposal = await createProposalFromParsed(parsed, filename, user.id)
     return NextResponse.json({ id: proposal.id, title: proposal.title })
   } catch (err) {
-    console.error('parse/create failed', err)
-    return NextResponse.json({ error: 'Could not parse that PDF' }, { status: 500 })
+    console.error('proposal create failed', err)
+    return NextResponse.json({ error: 'Could not save that proposal' }, { status: 500 })
   }
 }

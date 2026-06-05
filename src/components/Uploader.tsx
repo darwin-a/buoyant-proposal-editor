@@ -2,6 +2,11 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { parsePdf, setPdfWorkerSrc } from '@/lib/parse'
+
+// Parsing runs in the browser; pdfjs needs its worker bundle. Resolving the URL through
+// the bundler keeps the worker version locked to the installed pdfjs-dist.
+setPdfWorkerSrc(new URL('pdfjs-dist/legacy/build/pdf.worker.min.mjs', import.meta.url).toString())
 
 export function Uploader() {
   const [busy, setBusy] = useState<false | 'upload' | 'sample'>(false)
@@ -22,10 +27,28 @@ export function Uploader() {
     }
   }
 
-  function upload(file: File) {
-    const form = new FormData()
-    form.append('file', file)
-    send('/api/proposals', { method: 'POST', body: form }, 'upload')
+  // Parse in the browser, then POST only the recovered structure (a few KB) — the raw
+  // PDF (often 10–18 MB) never leaves the client, so it can't hit Vercel's 4.5 MB limit.
+  async function upload(file: File) {
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      setError('That doesn’t look like a PDF.')
+      return
+    }
+    setError('')
+    setBusy('upload')
+    try {
+      const data = new Uint8Array(await file.arrayBuffer())
+      const parsed = await parsePdf(data, file.name)
+      await send('/api/proposals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.name, parsed }),
+      }, 'upload')
+    } catch (err) {
+      console.error('client parse failed', err)
+      setBusy(false)
+      setError('Couldn’t read that PDF in the browser. It may be scanned or corrupted.')
+    }
   }
 
   return (

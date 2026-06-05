@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { dedup, recoverBlocks, detectImmutables, collapseShadows, type Line } from './parse'
+import { dedup, recoverBlocks, detectImmutables, collapseShadows, validateParsedDoc, type Line } from './parse'
 
 // y decreases in reading order (top of page first)
 const L = (text: string, y: number, height = 12, x = 60): Line => ({ text, x, y, height })
@@ -110,5 +110,68 @@ describe('detectImmutables', () => {
     const f = detectImmutables(text)
     expect(f).toContainEqual({ label: 'Engineer (PE)', value: 'Donald J. Jenkins' })
     expect(f).toContainEqual({ label: 'PE license', value: 'PE-2020000059' })
+  })
+})
+
+describe('validateParsedDoc', () => {
+  const good = {
+    title: 'Statement of Qualifications — City of Dixon',
+    blocks: [
+      { id: 'b-0', type: 'heading', text: 'OUR FIRM', level: 2 },
+      { id: 'b-1', type: 'paragraph', text: 'MECO is a firm.' },
+    ],
+    lockedFields: [{ label: 'Client', value: 'Dixon' }],
+  }
+
+  it('accepts a well-formed parsed doc and returns a clean copy', () => {
+    const out = validateParsedDoc(good)
+    expect(out).not.toBeNull()
+    expect(out!.title).toBe(good.title)
+    expect(out!.blocks).toHaveLength(2)
+    expect(out!.lockedFields).toEqual([{ label: 'Client', value: 'Dixon' }])
+  })
+
+  it('rejects non-objects', () => {
+    expect(validateParsedDoc(null)).toBeNull()
+    expect(validateParsedDoc('nope')).toBeNull()
+    expect(validateParsedDoc(42)).toBeNull()
+  })
+
+  it('rejects when blocks is missing or not an array', () => {
+    expect(validateParsedDoc({ title: 'x', lockedFields: [] })).toBeNull()
+    expect(validateParsedDoc({ title: 'x', blocks: {}, lockedFields: [] })).toBeNull()
+  })
+
+  it('rejects a doc with zero usable blocks', () => {
+    expect(validateParsedDoc({ title: 'x', blocks: [{ type: 'paragraph' }], lockedFields: [] })).toBeNull()
+  })
+
+  it('drops malformed blocks but keeps the valid ones', () => {
+    const out = validateParsedDoc({
+      title: 'x',
+      blocks: [
+        { id: 'b-0', type: 'paragraph', text: 'keep me' },
+        { id: 'b-1', type: 'banana', text: 'bad type' },
+        { id: 'b-2', type: 'heading' }, // no text
+        { text: 'no type either' },
+      ],
+      lockedFields: [],
+    })
+    expect(out!.blocks).toHaveLength(1)
+    expect(out!.blocks[0].text).toBe('keep me')
+  })
+
+  it('drops locked fields that are not label/value string pairs', () => {
+    const out = validateParsedDoc({
+      ...good,
+      lockedFields: [{ label: 'Client', value: 'Dixon' }, { label: 'x' }, 'junk', { label: 1, value: 2 }],
+    })
+    expect(out!.lockedFields).toEqual([{ label: 'Client', value: 'Dixon' }])
+  })
+
+  it('falls back to a string title when title is missing', () => {
+    const out = validateParsedDoc({ blocks: good.blocks, lockedFields: [] })
+    expect(typeof out!.title).toBe('string')
+    expect(out!.title.length).toBeGreaterThan(0)
   })
 })

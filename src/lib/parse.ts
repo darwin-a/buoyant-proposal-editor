@@ -1,6 +1,12 @@
 // Pure-JS PDF → structured blocks + immutable fields. Ported from the adhoc spike.
 // Deterministic; the AI proxy is only a future fallback for PDFs this mangles (C7).
-import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
+import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist/legacy/build/pdf.mjs'
+
+// Browser only: point pdfjs at its worker bundle before parsing. No-op on the server
+// (Node runs pdfjs on the main thread, which is how seeding/sample parse already works).
+export function setPdfWorkerSrc(src: string) {
+  GlobalWorkerOptions.workerSrc = src
+}
 
 export type BlockType = 'heading' | 'paragraph'
 export interface Block {
@@ -180,6 +186,44 @@ export function detectImmutables(fullText: string): LockedField[] {
   for (const lic of all(/MO PE\s+(?:No\.?\s*)?((?:PE-|E-)?[0-9]{5,})/g)) add('PE license', lic)
   for (const name of all(/\b([A-Z][a-z]+(?: [A-Z]\.)? [A-Z][a-z]+), PE\b/g)) add('Engineer (PE)', name)
   return found
+}
+
+// ---- validate a client-parsed doc before persisting (parsing now runs in the browser) ----
+// The browser sends ParsedDoc JSON, so the server must not trust its shape. Returns a
+// sanitized doc, or null if it isn't a usable document.
+const MAX_BLOCKS = 5000
+const MAX_TEXT = 20_000
+export function validateParsedDoc(input: unknown): ParsedDoc | null {
+  if (typeof input !== 'object' || input === null) return null
+  const o = input as Record<string, unknown>
+  if (!Array.isArray(o.blocks)) return null
+
+  const blocks: Block[] = []
+  for (const b of o.blocks.slice(0, MAX_BLOCKS)) {
+    if (typeof b !== 'object' || b === null) continue
+    const r = b as Record<string, unknown>
+    if ((r.type !== 'heading' && r.type !== 'paragraph') || typeof r.text !== 'string' || !r.text.trim()) continue
+    blocks.push({
+      id: typeof r.id === 'string' && r.id ? r.id : `b-${blocks.length}`,
+      type: r.type,
+      text: r.text.slice(0, MAX_TEXT),
+      ...(typeof r.level === 'number' ? { level: r.level } : {}),
+    })
+  }
+  if (blocks.length === 0) return null
+
+  const lockedFields: LockedField[] = Array.isArray(o.lockedFields)
+    ? o.lockedFields.flatMap((f) => {
+        if (typeof f !== 'object' || f === null) return []
+        const r = f as Record<string, unknown>
+        return typeof r.label === 'string' && typeof r.value === 'string'
+          ? [{ label: r.label, value: r.value }]
+          : []
+      })
+    : []
+
+  const title = typeof o.title === 'string' && o.title.trim() ? o.title.slice(0, 300) : 'Untitled proposal'
+  return { title, blocks, lockedFields }
 }
 
 // ---- orchestrator ----
