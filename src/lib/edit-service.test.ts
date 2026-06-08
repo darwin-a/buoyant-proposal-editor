@@ -94,4 +94,28 @@ describe('parseEditResponse', () => {
     )
     expect(r.changedEntities).toEqual(['a→b'])
   })
+
+  it('parses groundedIn when present on a valid edit', () => {
+    const r = parseEditResponse(
+      JSON.stringify({ proposedText: 'MECO rehabilitated the NEMO bridge.', rationale: 'added', changedEntities: [], groundedIn: ['NEMO Bridge SOQ'] }),
+      BLOCK,
+    )
+    expect(r.groundedIn).toEqual(['NEMO Bridge SOQ'])
+  })
+
+  it('omits groundedIn when absent', () => {
+    const r = parseEditResponse(JSON.stringify({ proposedText: 'MECO marks 40 years.', rationale: '' }), BLOCK)
+    expect(r.groundedIn).toBeUndefined()
+  })
+})
+
+describe('MockEditService with context', () => {
+  it('echoes provided sources into groundedIn', async () => {
+    const r = await svc.proposeEdit({
+      blockText: 'We serve municipalities.',
+      instruction: 'add a sentence about our bridge work',
+      context: [{ source: 'NEMO Bridge SOQ', text: 'MECO rehabilitated the NEMO bridge.' }],
+    })
+    expect(r.groundedIn).toEqual(['NEMO Bridge SOQ'])
+  })
 })

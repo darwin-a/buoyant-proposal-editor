@@ -1,14 +1,21 @@
 import Anthropic from '@anthropic-ai/sdk'
 
+export interface EditContext {
+  source: string
+  heading?: string
+  text: string
+}
 export interface EditRequest {
   blockText: string
   instruction: string
+  context?: EditContext[] // retrieved KB passages to ground the edit in
 }
 export interface EditResponse {
   proposedText: string
   rationale: string
   changedEntities: string[] // entities the edit intentionally changed; [] = none (faithfulness)
   clarification?: string // set when the model can't/won't edit — show a question, NOT a diff
+  groundedIn?: string[] // KB source titles the edit actually drew from
 }
 export interface EditService {
   proposeEdit(req: EditRequest): Promise<EditResponse>
@@ -19,7 +26,12 @@ const cap = (s: string) => (s.length ? s[0].toUpperCase() + s.slice(1) : s)
 
 // Deterministic, token-free. Drives the whole loop before the proxy token lands.
 export class MockEditService implements EditService {
-  async proposeEdit({ blockText, instruction }: EditRequest): Promise<EditResponse> {
+  async proposeEdit(req: EditRequest): Promise<EditResponse> {
+    const base = this.compute(req.blockText, req.instruction)
+    return req.context?.length ? { ...base, groundedIn: req.context.map((c) => c.source) } : base
+  }
+
+  private compute(blockText: string, instruction: string): EditResponse {
     const instr = instruction.trim()
 
     // replace/fix a name: "change X to Y" / "replace X with Y" / "X should be Y"
@@ -92,6 +104,9 @@ export function parseEditResponse(text: string, blockText: string): EditResponse
     changedEntities: Array.isArray(parsed.changedEntities)
       ? parsed.changedEntities.filter((e): e is string => typeof e === 'string')
       : [],
+    ...(Array.isArray(parsed.groundedIn)
+      ? { groundedIn: parsed.groundedIn.filter((s: unknown): s is string => typeof s === 'string') }
+      : {}),
   }
 }
 
@@ -103,18 +118,29 @@ export class ProxyEditService implements EditService {
     this.client = new Anthropic({ apiKey: token, ...(opts.baseURL ? { baseURL: opts.baseURL } : {}) })
     this.model = opts.model ?? process.env.BUOYANT_MODEL ?? 'claude-sonnet-4-6'
   }
-  async proposeEdit({ blockText, instruction }: EditRequest): Promise<EditResponse> {
+  async proposeEdit({ blockText, instruction, context }: EditRequest): Promise<EditResponse> {
+    const grounded = !!context?.length
+    const pastWork = grounded
+      ? "\n\nPAST WORK (the firm's real past proposals — ground the edit in these where they genuinely fit; do NOT invent):\n" +
+        context!.map((c) => `[source: ${c.source}${c.heading ? ` — ${c.heading}` : ''}]\n${c.text}`).join('\n\n')
+      : ''
+    const system =
+      'You revise ONE paragraph of a civil-engineering proposal. Apply only the requested change. ' +
+      'Never alter client names, people, license numbers, dates, or figures unless explicitly asked. ' +
+      (grounded
+        ? 'When you use a fact from PAST WORK, do not invent details, and list the source titles you actually drew from in "groundedIn" (string[], [] if none). '
+        : '') +
+      'If the instruction is too vague, ambiguous, or unsafe to make a confident single-paragraph edit, ' +
+      'do NOT guess and do NOT write any prose into proposedText — instead return ' +
+      '{"clarification": "<one short question asking what to change>"} and leave proposedText empty. ' +
+      'Otherwise reply with JSON only: {"proposedText": string, "rationale": string, "changedEntities": string[]' +
+      (grounded ? ', "groundedIn": string[]' : '') +
+      '}.'
     const msg = await this.client.messages.create({
       model: this.model,
       max_tokens: 1024,
-      system:
-        'You revise ONE paragraph of a civil-engineering proposal. Apply only the requested change. ' +
-        'Never alter client names, people, license numbers, dates, or figures unless explicitly asked. ' +
-        'If the instruction is too vague, ambiguous, or unsafe to make a confident single-paragraph edit, ' +
-        'do NOT guess and do NOT write any prose into proposedText — instead return ' +
-        '{"clarification": "<one short question asking what to change>"} and leave proposedText empty. ' +
-        'Otherwise reply with JSON only: {"proposedText": string, "rationale": string, "changedEntities": string[]}.',
-      messages: [{ role: 'user', content: `Paragraph:\n${blockText}\n\nInstruction: ${instruction}` }],
+      system,
+      messages: [{ role: 'user', content: `Paragraph:\n${blockText}\n\nInstruction: ${instruction}${pastWork}` }],
     })
     const text = msg.content.map((c) => (c.type === 'text' ? c.text : '')).join('')
     return parseEditResponse(text, blockText)
