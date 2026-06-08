@@ -2,11 +2,14 @@ import { describe, it, expect } from 'vitest'
 import { cosine, keywordOverlap, hybridScore, rankChunks, buildRetrievalQuery, MIN_SCORE, type Candidate } from './kb-retrieval'
 
 describe('buildRetrievalQuery', () => {
-  it('strips instruction filler so topical nouns dominate', () => {
-    const q = buildRetrievalQuery('add a sentence about our bridge rehabilitation experience', 'MECO serves municipalities.')
+  it('uses only the instruction topic when it has one, ignoring a boilerplate paragraph', () => {
+    const q = buildRetrievalQuery('add a sentence about our bridge rehabilitation experience', 'MECO is celebrating its 40th anniversary this year.')
     expect(q).toContain('bridge rehabilitation experience')
-    expect(q).not.toMatch(/\badd\b|\bsentence\b|\babout\b/)
-    expect(q).toContain('MECO serves municipalities.')
+    expect(q).not.toMatch(/\badd\b|\bsentence\b|40th anniversary/)
+  })
+  it('falls back to the paragraph when the instruction carries no topic', () => {
+    const q = buildRetrievalQuery('expand this', 'We rehabilitated the Boone Creek bridge.')
+    expect(q).toContain('Boone Creek bridge')
   })
 })
 

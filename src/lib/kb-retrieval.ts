@@ -58,13 +58,15 @@ const STOP = new Set([
   'paragraph', 'line', 'bit', 'here', 'it', 'its', 'in', 'into', 'make', 'write', 'something',
 ])
 
-// Build the retrieval query from the instruction (filler stripped) + the selected paragraph.
-// The instruction is the explicit ask, so it's weighted over the paragraph being edited —
-// otherwise a boilerplate paragraph drowns out the distinctive terms the user typed.
+// Build the retrieval query. The instruction's topic (filler stripped) drives retrieval.
+// The paragraph being edited is often boilerplate — an intro or cover letter — that would
+// match the near-identical boilerplate in every KB doc and bury the content the user asked
+// for. So we only fall back to the paragraph when the instruction carries no topic of its
+// own (e.g. "expand this", "add more detail").
 export function buildRetrievalQuery(instruction: string, blockText: string): string {
-  const cleaned = (instruction.toLowerCase().match(/[a-z0-9]+/g) ?? []).filter((w) => !STOP.has(w)).join(' ')
-  const emphasis = cleaned ? `${cleaned}. ${cleaned}. ${cleaned}. ` : ''
-  return `${emphasis}${blockText.slice(0, 200)}`.trim()
+  const topic = (instruction.toLowerCase().match(/[a-z0-9]+/g) ?? []).filter((w) => !STOP.has(w))
+  if (topic.length === 0) return blockText.slice(0, 300)
+  return `${topic.join(' ')}.`
 }
 
 // Pure ranker — unit-tested without db/network.
