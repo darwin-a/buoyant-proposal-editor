@@ -56,6 +56,8 @@ const STOP = new Set([
   'expand', 'on', 'onto', 'mention', 'with', 'more', 'detail', 'details', 'please', 'based',
   'to', 'of', 'from', 'and', 'for', 'that', 'this', 'some', 'info', 'information', 'elaborate',
   'paragraph', 'line', 'bit', 'here', 'it', 'its', 'in', 'into', 'make', 'write', 'something',
+  'talk', 'discuss', 'describe', 'did', 'do', 'done', 'tell', 'show', 'give', 'want', 'need',
+  'highlight', 'reference', 'cite',
 ])
 
 // Build the retrieval query. The instruction's topic (filler stripped) drives retrieval.

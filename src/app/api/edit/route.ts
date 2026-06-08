@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { getEditService, type EditContext } from '@/lib/edit-service'
-import { wantsGrounding } from '@/lib/kb-intent'
+import { wantsGrounding, isStyleOnlyEdit } from '@/lib/kb-intent'
 import { retrieve, buildRetrievalQuery } from '@/lib/kb-retrieval'
 import { db } from '@/lib/db'
 
@@ -17,15 +17,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'blockText and instruction are required' }, { status: 400 })
   }
 
+  // What's attached to this proposal scopes retrieval.
+  let kbIds: string[] | undefined
+  if (typeof proposalId === 'string') {
+    const p = await db.proposal.findUnique({ where: { id: proposalId }, select: { attachedKbIds: true } })
+    const ids = (p?.attachedKbIds ?? []) as unknown as string[]
+    if (Array.isArray(ids) && ids.length) kbIds = ids
+  }
+  const hasAttached = !!(kbIds && kbIds.length)
+
+  // Ground when the instruction explicitly asks for past content, OR — once a KB is
+  // attached — for any edit that isn't a pure phrasing change (you attached it for a reason).
+  const shouldGround = wantsGrounding(instruction) || (hasAttached && !isStyleOnlyEdit(instruction))
+
   let context: EditContext[] | undefined
   let sources: { id: string; title: string }[] | undefined
-  if (wantsGrounding(instruction)) {
-    let kbIds: string[] | undefined
-    if (typeof proposalId === 'string') {
-      const p = await db.proposal.findUnique({ where: { id: proposalId }, select: { attachedKbIds: true } })
-      const ids = (p?.attachedKbIds ?? []) as unknown as string[]
-      if (Array.isArray(ids) && ids.length) kbIds = ids
-    }
+  if (shouldGround) {
     try {
       const hits = await retrieve(buildRetrievalQuery(instruction, blockText), { kbIds })
       if (hits.length) {
