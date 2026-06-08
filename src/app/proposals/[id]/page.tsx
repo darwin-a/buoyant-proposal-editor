@@ -15,6 +15,8 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
 
   const blocks = (proposal.document ?? []) as unknown as Block[]
   const locked = (proposal.lockedFields ?? []) as unknown as LockedField[]
+  const kbDocs = await db.kbDocument.findMany({ select: { id: true, title: true, projectType: true }, orderBy: { createdAt: 'desc' } })
+  const attachedKbIds = (proposal.attachedKbIds ?? []) as unknown as string[]
 
   return (
     <main className="min-h-screen">
@@ -28,7 +30,7 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
         </span>
       </header>
 
-      <Workspace proposalId={proposal.id} blocks={blocks} lockedFields={locked} />
+      <Workspace proposalId={proposal.id} blocks={blocks} lockedFields={locked} kbDocs={kbDocs} attachedKbIds={attachedKbIds} />
     </main>
   )
 }

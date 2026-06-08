@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Editor } from './Editor'
+import { KbAttach, type KbOption } from './KbAttach'
 import type { Block, LockedField } from '@/lib/parse'
 
 const occurrences = (text: string, v: string) => (v ? text.split(v).length - 1 : 0)
@@ -12,10 +13,14 @@ export function Workspace({
   proposalId,
   blocks,
   lockedFields,
+  kbDocs,
+  attachedKbIds,
 }: {
   proposalId: string
   blocks: Block[]
   lockedFields: LockedField[]
+  kbDocs: KbOption[]
+  attachedKbIds: string[]
 }) {
   const original = blocks.map((b) => b.text).join('\n')
   const [docText, setDocText] = useState(original)
@@ -67,6 +72,7 @@ export function Workspace({
           ))}
           {lockedFields.length === 0 && <li className="text-xs text-mute">None detected.</li>}
         </ul>
+        <KbAttach proposalId={proposalId} kbDocs={kbDocs} initialAttached={attachedKbIds} />
       </aside>
     </div>
   )
