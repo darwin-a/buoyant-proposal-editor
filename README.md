@@ -90,6 +90,30 @@ intentionally changed. There are two implementations behind it:
 The important field is the list of changed entities: the model declares what it meant to change, so
 anything else that drifts is something the UI can catch (the locked-field guard below).
 
+If an instruction is too vague to act on safely, the model returns a question instead of a guess, and
+the UI shows that question with no diff and no Apply button. A fuzzy "change this a bit" used to get
+the model's "could you clarify?" reply stuffed into the diff as the new paragraph; now it can't
+quietly mangle the text.
+
+### Grounding edits in past work
+The firm's five past proposals are the knowledge base, and an "add" or "expand" edit can pull real
+content from them instead of inventing it. The pipeline reuses the text the parser already recovered
+(`KbDocument.document`), so the large PDFs never touch retrieval:
+
+- chunk each past proposal into ~800-char passages under their section headings (`src/lib/kb-chunk.ts`);
+- embed them once at seed (`text-embedding-3-small` via the proxy) and store the vectors as JSON;
+- at edit time, retrieve by a hybrid score — 0.8 cosine + 0.2 keyword overlap — inject the top
+  passages, and show a citation ("Grounded in: City of Warrenton") that links to the source PDF.
+
+A few choices worth calling out. The vectors live in Postgres and I score them in memory; at a few
+hundred chunks that's instant, and pgvector would be solving a problem I don't have. Retrieval runs on
+the *instruction's* topic, not the paragraph being edited — the paragraph is often boilerplate (a
+cover letter, an "OUR FIRM" intro) that matches the near-identical boilerplate in every past proposal
+and buries what you actually asked for. A minimum-score guard means a weak match grounds in nothing
+rather than the wrong precedent. And you can attach specific past proposals to a document to scope
+retrieval: once something's attached, every content edit grounds against it by default, while pure
+phrasing edits (tighten, make formal) skip it.
+
 ### UX
 - A TipTap/ProseMirror editor where each block has an ID. Select text and a floating trigger appears
   (Google-Docs style) → type an instruction → see a diff → apply or discard.
@@ -117,13 +141,10 @@ sidesteps that limit entirely and is faster too. The server validates the JSON b
 
 I had roughly four focused hours, so I scoped hard and kept the loop closing over adding features.
 
-- **Grounding edits in the KB (RAG).** The biggest cut. You can browse and read the past proposals,
-  but the AI doesn't yet pull from them into an edit ("add a paragraph about a similar bridge
-  project"). It was out of scope for the time I had, and a shallow version would've been worse than
-  none — retrieval that quietly grabs the wrong precedent is its own failure. It's my #1 next step.
-- **Multi-paragraph edits.** One instruction spanning several blocks is a lot harder (coordinating
-  and reconciling changes across blocks). The per-paragraph loop is the bar, so that's where I spent
-  the time.
+- **Multi-paragraph edits.** The biggest cut. One instruction spanning several blocks is a lot harder
+  (coordinating and reconciling changes across blocks). The per-paragraph loop is the bar, so that's
+  where I spent the time. (Grounding edits in the KB was the other big one — I went back and built it;
+  see §2 and §6.)
 - **Export back to PDF.** The edited document lives as structured blocks. Re-rendering to a PDF is a
   separate problem and I'd want to do it properly (see §7).
 - **The hard fixture.** The parser targets a single-column SOQ. Multi-column reading order and tables
@@ -173,22 +194,30 @@ real signal that entity tracking should be semantic, not substring (§4).
 
 ## 6. What I added beyond the brief
 
+- **Grounding edits in past work.** This was my #1 next-step, and I went back and built it. An
+  "add"/"expand" edit retrieves from the firm's real past proposals and grounds the change in them,
+  with a citation that links back to the source PDF — so a claim about bridge experience comes from an
+  actual past bridge project, not the model's imagination. How it works is in §2.
 - **The KB as a readable corpus.** You can browse the firm's five past proposals and read the
   original PDF in-app, served behind login (the bytes live in Postgres, compressed 69 MB → 14 MB, and
-  never touch the repo or `/public` because they're proprietary). Past work is the raw material for
-  grounding, so this is also the groundwork for RAG in §7.
+  never touch the repo or `/public` because they're proprietary). It's also the corpus the grounding
+  retrieves from.
 - **The live locked-facts guard.** These proposals are full of facts that can't drift — license
   numbers, client names. Surfacing them live, and separating an intentional change from a collateral
   one in the diff, is the thing I'd want most as a real user, and it's the direct answer to the
   failure mode I care about.
+- **A clarification guard on vague instructions.** When the model can't act on an instruction safely,
+  it returns a question rather than a guess, shown with no Apply button — so a fuzzy ask can't quietly
+  rewrite a paragraph. Details in §2.
 
 I'd add more given the time — see below.
 
 ## 7. What I'd build next given another 8 hours
 
-1. **Push the knowledge base into the edits (RAG).** Retrieve relevant passages from the past
-   proposals and let the AI ground a change in them, with a citation back to the source. The KB is
-   already structured for it.
+1. **Deep-link citations to the exact page.** The "Grounded in" citation already opens the source
+   PDF; it just can't jump to the spot, because chunks don't carry page numbers yet. I'd thread page
+   numbers through the parser into the chunks and link to `#page=N` so a reviewer lands on the
+   passage the edit came from.
 2. **Approval workflows and comments.** Draft → request a PE review → comment / approve / reject, on
    the roles that already exist. This is how the firm actually signs off on a proposal.
 3. **Export.** There are a few ways to solve it; I'd look into real PDF editing first rather than
@@ -201,5 +230,6 @@ I'd add more given the time — see below.
 ## Architecture at a glance
 
 Next.js (App Router) · TypeScript · Prisma + Postgres · TipTap · pdfjs (deterministic parse,
-client-side) · Anthropic SDK via the Buoyant proxy. Deployed on Vercel + Vercel Postgres (Neon).
-See `docs/agentic_implementations/` for specs, the implementation plan, and the deploy runbook.
+client-side) · Anthropic SDK (edits) and OpenAI SDK (embeddings) via the Buoyant proxy · in-memory
+hybrid retrieval. Deployed on Vercel + Vercel Postgres (Neon). See `docs/agentic_implementations/`
+for specs, the implementation plan, and the deploy runbook.
