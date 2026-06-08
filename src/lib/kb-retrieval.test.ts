@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest'
-import { cosine, keywordOverlap, hybridScore, rankChunks, MIN_SCORE, type Candidate } from './kb-retrieval'
+import { cosine, keywordOverlap, hybridScore, rankChunks, buildRetrievalQuery, MIN_SCORE, type Candidate } from './kb-retrieval'
+
+describe('buildRetrievalQuery', () => {
+  it('strips instruction filler so topical nouns dominate', () => {
+    const q = buildRetrievalQuery('add a sentence about our bridge rehabilitation experience', 'MECO serves municipalities.')
+    expect(q).toContain('bridge rehabilitation experience')
+    expect(q).not.toMatch(/\badd\b|\bsentence\b|\babout\b/)
+    expect(q).toContain('MECO serves municipalities.')
+  })
+})
 
 describe('cosine', () => {
   it('is 1 for identical vectors and 0 for orthogonal', () => {

@@ -49,6 +49,24 @@ export function hybridScore(queryEmb: number[], queryText: string, chunkEmb: num
   return COSINE_W * cosine(queryEmb, chunkEmb) + KEYWORD_W * keywordOverlap(queryText, chunkText)
 }
 
+// Instruction framing words that carry no topical signal — stripped so the
+// distinctive nouns ("bridge rehabilitation") dominate retrieval, not "add a sentence about".
+const STOP = new Set([
+  'add', 'a', 'an', 'the', 'sentence', 'about', 'our', 'us', 'we', 'include', 'including',
+  'expand', 'on', 'onto', 'mention', 'with', 'more', 'detail', 'details', 'please', 'based',
+  'to', 'of', 'from', 'and', 'for', 'that', 'this', 'some', 'info', 'information', 'elaborate',
+  'paragraph', 'line', 'bit', 'here', 'it', 'its', 'in', 'into', 'make', 'write', 'something',
+])
+
+// Build the retrieval query from the instruction (filler stripped) + the selected paragraph.
+// The instruction is the explicit ask, so it's weighted over the paragraph being edited —
+// otherwise a boilerplate paragraph drowns out the distinctive terms the user typed.
+export function buildRetrievalQuery(instruction: string, blockText: string): string {
+  const cleaned = (instruction.toLowerCase().match(/[a-z0-9]+/g) ?? []).filter((w) => !STOP.has(w)).join(' ')
+  const emphasis = cleaned ? `${cleaned}. ${cleaned}. ${cleaned}. ` : ''
+  return `${emphasis}${blockText.slice(0, 200)}`.trim()
+}
+
 // Pure ranker — unit-tested without db/network.
 export function rankChunks(queryEmb: number[], queryText: string, candidates: Candidate[], k: number): RetrievedChunk[] {
   return candidates
