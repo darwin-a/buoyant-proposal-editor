@@ -47,6 +47,7 @@ model Proposal {
   sourceFilename        String
   document              Json     // ordered Block[] from the parser
   lockedFields          Json     @default("[]") // { label, value }[] immutable facts
+  attachedKbIds         Json     @default("[]") // KbDocument ids scoped to this proposal
   createdById           String
   createdBy             User     @relation("createdBy", fields: [createdById], references: [id])
   reviewRequestedFromId String? // light "request review from X"
@@ -85,4 +86,19 @@ model KbDocument {
   document       Json     // ordered Block[]
   pdfData        Bytes?   // compressed original PDF, served behind auth for the reader
   createdAt      DateTime @default(now())
+
+  chunks KbChunk[]
+}
+
+// Retrieval index: one row per ~800-char passage of a KB document, with its embedding.
+model KbChunk {
+  id           String     @id @default(cuid())
+  kbDocumentId String
+  kbDocument   KbDocument @relation(fields: [kbDocumentId], references: [id], onDelete: Cascade)
+  heading      String?    // nearest preceding section heading — used in the citation
+  text         String
+  ordinal      Int        // order within the source doc
+  embedding    Json       // number[] — text-embedding-3-small, 1536 dims
+
+  @@index([kbDocumentId])
 }
