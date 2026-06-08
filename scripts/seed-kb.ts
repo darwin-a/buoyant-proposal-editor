@@ -4,6 +4,8 @@ import { readFile } from 'node:fs/promises'
 import type { Prisma } from '@prisma/client'
 import { db } from '../src/lib/db'
 import { parsePdf } from '../src/lib/parse'
+import { chunkBlocks } from '../src/lib/kb-chunk'
+import { embed } from '../src/lib/embeddings'
 
 const KB = [
   { file: 'monroe_city_electrical_soq.pdf', type: 'Electrical' },
@@ -23,7 +25,7 @@ async function main() {
     const pdf = await readFile(`docs/ExampleProposals/kb/_compressed/${file}`).catch(() =>
       readFile(`docs/ExampleProposals/kb/${file}`),
     )
-    await db.kbDocument.create({
+    const doc = await db.kbDocument.create({
       data: {
         title: parsed.title,
         sourceFilename: file,
@@ -32,7 +34,19 @@ async function main() {
         pdfData: pdf,
       },
     })
-    console.log(`kb: ${parsed.title}  (${type}, ${(pdf.length / 1e6).toFixed(1)}MB pdf)`)
+    const chunks = chunkBlocks(parsed.blocks)
+    const vectors = chunks.length ? await embed(chunks.map((c) => c.text)) : []
+    if (chunks.length)
+      await db.kbChunk.createMany({
+        data: chunks.map((c, i) => ({
+          kbDocumentId: doc.id,
+          heading: c.heading,
+          text: c.text,
+          ordinal: c.ordinal,
+          embedding: vectors[i] as unknown as Prisma.InputJsonValue,
+        })),
+      })
+    console.log(`kb: ${parsed.title}  (${type}, ${(pdf.length / 1e6).toFixed(1)}MB pdf, ${chunks.length} chunks)`)
   }
 }
 
