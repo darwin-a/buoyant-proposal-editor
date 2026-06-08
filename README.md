@@ -209,6 +209,10 @@ real signal that entity tracking should be semantic, not substring (§4).
 - **A clarification guard on vague instructions.** When the model can't act on an instruction safely,
   it returns a question rather than a guess, shown with no Apply button — so a fuzzy ask can't quietly
   rewrite a paragraph. Details in §2.
+- **Export the edited document.** A one-click "Download .md" that re-renders the current document
+  (with every applied edit) to Markdown. I re-render our clean `Block[]` rather than patch the
+  original PDF — the original stores text as positioned glyphs, so editing it in place isn't tractable
+  in scope. Markdown keeps the structure portable; a typeset PDF export is the natural next step (§7).
 
 I'd add more given the time — see below.
 
@@ -220,8 +224,9 @@ I'd add more given the time — see below.
    passage the edit came from.
 2. **Approval workflows and comments.** Draft → request a PE review → comment / approve / reject, on
    the roles that already exist. This is how the firm actually signs off on a proposal.
-3. **Export.** There are a few ways to solve it; I'd look into real PDF editing first rather than
-   re-rendering from scratch.
+3. **PDF export.** Markdown export ships today (§6); the next step is a typeset PDF. I'd render it
+   from our `Block[]` structure (a clean generated document) rather than try to patch the original
+   PDF's positioned-glyph text.
 4. **Semantic locked-fact tracking** to fix the §5 failure, and **handling the hard fixture**
    (multi-column reading order + tables).
 
