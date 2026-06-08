@@ -13,6 +13,9 @@ interface Suggestion {
   why: string
 }
 
+// Shorten the long "Statement of Qualifications — City of X" titles to just a label.
+const label = (d: KbOption) => d.title.replace(/^Statement of Qualifications\s*[—-]\s*/i, '') + (d.projectType ? ` · ${d.projectType}` : '')
+
 export function KbAttach({ proposalId, kbDocs, initialAttached }: { proposalId: string; kbDocs: KbOption[]; initialAttached: string[] }) {
   const [attached, setAttached] = useState<string[]>(initialAttached)
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
@@ -40,42 +43,42 @@ export function KbAttach({ proposalId, kbDocs, initialAttached }: { proposalId: 
   const toggle = (id: string) => persist(attached.includes(id) ? attached.filter((x) => x !== id) : [...attached, id])
 
   return (
-    <div className="mt-6">
-      <span className="text-xs font-semibold uppercase tracking-wide text-mute">Knowledge base</span>
-      <p className="mt-1 mb-2 text-xs leading-relaxed text-mute">Attach past proposals to ground “add / expand” edits in real work.</p>
+    <div className="mb-6 rounded-xl border border-line bg-card px-4 py-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="mr-1 text-xs font-semibold uppercase tracking-wide text-mute">Knowledge base</span>
+        {kbDocs.map((d) => {
+          const on = attached.includes(d.id)
+          return (
+            <button
+              key={d.id}
+              onClick={() => toggle(d.id)}
+              title={d.title}
+              className={`rounded-full border px-2.5 py-1 text-xs transition ${
+                on ? 'border-periwinkle bg-periwinkle-soft font-medium text-navy' : 'border-line bg-card text-mute hover:border-periwinkle hover:text-ink'
+              }`}
+            >
+              {on ? '✓ ' : '+ '}
+              {label(d)}
+            </button>
+          )
+        })}
+        {kbDocs.length === 0 && <span className="text-xs text-mute">No KB documents.</span>}
+      </div>
 
       {suggestions.length > 0 && (
-        <div className="mb-3 space-y-1.5">
+        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-navy">
+          <span className="text-mute">Suggested:</span>
           {suggestions.map((s) => (
-            <div key={s.id} className="rounded-lg border border-periwinkle/40 bg-periwinkle-soft px-2.5 py-2 text-[11px] text-navy">
-              <span className="font-medium">{s.title}</span> — {s.why}.
-              <button onClick={() => toggle(s.id)} className="ml-2 font-semibold underline">
-                Attach
-              </button>
-            </div>
+            <button key={s.id} onClick={() => toggle(s.id)} className="rounded-full bg-periwinkle-soft px-2 py-0.5 font-medium hover:underline" title={s.why}>
+              + {label({ id: s.id, title: s.title, projectType: null })}
+            </button>
           ))}
         </div>
       )}
 
-      <ul className="space-y-1.5">
-        {kbDocs.map((d) => {
-          const on = attached.includes(d.id)
-          return (
-            <li key={d.id}>
-              <button
-                onClick={() => toggle(d.id)}
-                className={`flex w-full items-center justify-between rounded-lg border px-2.5 py-1.5 text-left text-sm transition ${
-                  on ? 'border-periwinkle bg-periwinkle-soft text-navy' : 'border-line bg-card text-ink hover:border-periwinkle'
-                }`}
-              >
-                <span className="truncate">{d.title}</span>
-                <span className="ml-2 shrink-0 text-[10px] uppercase tracking-wide">{on ? '✓ attached' : 'attach'}</span>
-              </button>
-            </li>
-          )
-        })}
-        {kbDocs.length === 0 && <li className="text-xs text-mute">No KB documents.</li>}
-      </ul>
+      <p className="mt-2 text-[11px] leading-relaxed text-mute">
+        Attached proposals ground “add / expand” edits in real past work — and scope retrieval so it pulls the right precedent.
+      </p>
     </div>
   )
 }

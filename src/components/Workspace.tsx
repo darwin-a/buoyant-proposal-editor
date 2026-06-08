@@ -32,9 +32,13 @@ export function Workspace({
   const changedCount = statuses.filter((s) => s.changed).length
 
   return (
-    <div className="mx-auto grid max-w-6xl grid-cols-[minmax(0,1fr)_16rem] gap-8 px-6 py-10">
-      {/* document sheet */}
-      <div className="rounded-2xl border border-line bg-card px-10 py-12 shadow-sm">
+    <div className="mx-auto max-w-6xl px-6 py-10">
+      {/* knowledge-base bar — attach past proposals to ground edits */}
+      <KbAttach proposalId={proposalId} kbDocs={kbDocs} initialAttached={attachedKbIds} />
+
+      <div className="grid grid-cols-[minmax(0,1fr)_16rem] gap-8">
+        {/* document sheet */}
+        <div className="rounded-2xl border border-line bg-card px-10 py-12 shadow-sm">
         {blocks.length === 0 ? (
           <p className="text-sm text-mute">No editable text found.</p>
         ) : (
@@ -72,8 +76,8 @@ export function Workspace({
           ))}
           {lockedFields.length === 0 && <li className="text-xs text-mute">None detected.</li>}
         </ul>
-        <KbAttach proposalId={proposalId} kbDocs={kbDocs} initialAttached={attachedKbIds} />
       </aside>
+      </div>
     </div>
   )
 }
