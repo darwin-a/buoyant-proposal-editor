@@ -31,7 +31,7 @@ const BlockId = Extension.create({
 
 type Status = 'saved' | 'dirty' | 'saving'
 type Selection = { from: number; to: number; text: string; blockId: string; top: number; left: number }
-type AiPhase = 'closed' | 'instructing' | 'proposing' | 'diff'
+type AiPhase = 'closed' | 'instructing' | 'proposing' | 'diff' | 'clarify'
 
 export function Editor({
   proposalId,
@@ -104,8 +104,11 @@ export function Editor({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ blockText: target.text, instruction }),
     })
-    setProposed(await res.json())
-    setPhase('diff')
+    const result: EditResponse = await res.json()
+    setProposed(result)
+    // A clarification means the model couldn't make a confident edit — show the question,
+    // never a diff or an Apply button. Keep the typed instruction so it's easy to refine.
+    setPhase(result.clarification ? 'clarify' : 'diff')
   }
 
   function accept() {
@@ -195,6 +198,32 @@ export function Editor({
           )}
 
           {phase === 'proposing' && <p className="py-1 text-sm text-mute">Proposing…</p>}
+
+          {phase === 'clarify' && proposed?.clarification && (
+            <div>
+              <div className="rounded border border-amber-200 bg-amber-50 px-2 py-2 text-[13px] text-amber-900">
+                <span className="font-medium">The AI needs more direction.</span>
+                <p className="mt-1">{proposed.clarification}</p>
+              </div>
+              <div className="mt-3 flex gap-2">
+                <input
+                  autoFocus
+                  value={instruction}
+                  onChange={(e) => setInstruction(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') propose()
+                    if (e.key === 'Escape') close()
+                  }}
+                  placeholder="Be more specific…"
+                  className="flex-1 rounded border border-line px-2 py-1.5 text-sm outline-none transition focus:border-periwinkle"
+                />
+                <button onClick={propose} disabled={!instruction.trim()} className="rounded bg-navy px-3 py-1.5 text-sm text-white transition hover:bg-navy-700 disabled:opacity-30">
+                  Retry
+                </button>
+                <button onClick={close} className="px-1 text-sm text-mute">✕</button>
+              </div>
+            </div>
+          )}
 
           {phase === 'diff' && proposed && (() => {
             const { collateral, intentional } = analyzeLockedChange(

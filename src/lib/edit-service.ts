@@ -8,6 +8,7 @@ export interface EditResponse {
   proposedText: string
   rationale: string
   changedEntities: string[] // entities the edit intentionally changed; [] = none (faithfulness)
+  clarification?: string // set when the model can't/won't edit — show a question, NOT a diff
 }
 export interface EditService {
   proposeEdit(req: EditRequest): Promise<EditResponse>
@@ -63,6 +64,37 @@ export class MockEditService implements EditService {
   }
 }
 
+// Turn the model's raw reply into an EditResponse. Pure + exported so it's unit-testable.
+// The cardinal rule: NEVER pass conversational prose off as a proposed paragraph. If we
+// can't read back a clean, changed paragraph, we surface a clarification instead of a diff.
+export function parseEditResponse(text: string, blockText: string): EditResponse {
+  const ask = (q: string): EditResponse => ({ proposedText: '', rationale: '', changedEntities: [], clarification: q })
+  const VAGUE = "I couldn't read a clean edit back from that. Try being more specific about what to change."
+
+  let parsed: Record<string, unknown>
+  try {
+    parsed = JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] ?? text)
+  } catch {
+    return ask(VAGUE)
+  }
+
+  const proposedText = typeof parsed.proposedText === 'string' ? parsed.proposedText : ''
+  const clarification = typeof parsed.clarification === 'string' ? parsed.clarification.trim() : ''
+
+  // No usable rewrite (empty, or identical to the source) → ask, don't diff.
+  if (!proposedText.trim() || proposedText.trim() === blockText.trim()) {
+    return ask(clarification || VAGUE)
+  }
+  // Model returned a real edit AND a question — prefer the edit, drop the chatter.
+  return {
+    proposedText,
+    rationale: typeof parsed.rationale === 'string' ? parsed.rationale : '',
+    changedEntities: Array.isArray(parsed.changedEntities)
+      ? parsed.changedEntities.filter((e): e is string => typeof e === 'string')
+      : [],
+  }
+}
+
 // Real AI via the Buoyant proxy. Same interface — flips on when the token is set.
 export class ProxyEditService implements EditService {
   private client: Anthropic
@@ -78,20 +110,14 @@ export class ProxyEditService implements EditService {
       system:
         'You revise ONE paragraph of a civil-engineering proposal. Apply only the requested change. ' +
         'Never alter client names, people, license numbers, dates, or figures unless explicitly asked. ' +
-        'Reply with JSON only: {"proposedText": string, "rationale": string, "changedEntities": string[]}.',
+        'If the instruction is too vague, ambiguous, or unsafe to make a confident single-paragraph edit, ' +
+        'do NOT guess and do NOT write any prose into proposedText — instead return ' +
+        '{"clarification": "<one short question asking what to change>"} and leave proposedText empty. ' +
+        'Otherwise reply with JSON only: {"proposedText": string, "rationale": string, "changedEntities": string[]}.',
       messages: [{ role: 'user', content: `Paragraph:\n${blockText}\n\nInstruction: ${instruction}` }],
     })
     const text = msg.content.map((c) => (c.type === 'text' ? c.text : '')).join('')
-    try {
-      const parsed = JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] ?? text)
-      return {
-        proposedText: parsed.proposedText ?? blockText,
-        rationale: parsed.rationale ?? '',
-        changedEntities: Array.isArray(parsed.changedEntities) ? parsed.changedEntities : [],
-      }
-    } catch {
-      return { proposedText: text.trim() || blockText, rationale: 'AI edit', changedEntities: [] }
-    }
+    return parseEditResponse(text, blockText)
   }
 }
 
