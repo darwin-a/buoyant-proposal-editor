@@ -5,6 +5,7 @@ import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { Extension } from '@tiptap/core'
 import { blocksToDoc, docToBlocks, type PMDoc } from '@/lib/tiptap'
+import { blocksToMarkdown, markdownFilename } from '@/lib/markdown'
 import type { Block, LockedField } from '@/lib/parse'
 import type { EditResponse } from '@/lib/edit-service'
 import { analyzeLockedChange } from '@/lib/locked-fields'
@@ -83,6 +84,18 @@ export function Editor({
     setStatus(res.ok ? 'saved' : 'dirty')
   }
 
+  function downloadMarkdown() {
+    if (!editor) return
+    const blocks = docToBlocks(editor.getJSON() as PMDoc)
+    const blob = new Blob([blocksToMarkdown(blocks)], { type: 'text/markdown;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = markdownFilename(blocks)
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   function askAi() {
     if (!sel) return
     setTarget(sel)
@@ -142,13 +155,21 @@ export function Editor({
     <div className="min-w-0">
       <div className="mb-8 flex items-center justify-between border-b border-line pb-3">
         <span className="text-xs text-mute">{label}</span>
-        <button
-          onClick={save}
-          disabled={status !== 'dirty'}
-          className="rounded-md bg-navy px-3 py-1.5 text-xs font-medium text-white transition hover:bg-navy-700 disabled:opacity-25"
-        >
-          Save
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={downloadMarkdown}
+            className="rounded-md border border-line px-3 py-1.5 text-xs font-medium text-ink transition hover:border-periwinkle"
+          >
+            Download .md
+          </button>
+          <button
+            onClick={save}
+            disabled={status !== 'dirty'}
+            className="rounded-md bg-navy px-3 py-1.5 text-xs font-medium text-white transition hover:bg-navy-700 disabled:opacity-25"
+          >
+            Save
+          </button>
+        </div>
       </div>
 
       <EditorContent editor={editor} />
