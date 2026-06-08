@@ -102,7 +102,7 @@ export function Editor({
     const res = await fetch('/api/edit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ blockText: target.text, instruction }),
+      body: JSON.stringify({ blockText: target.text, instruction, proposalId }),
     })
     const result: EditResponse = await res.json()
     setProposed(result)
@@ -237,6 +237,11 @@ export function Editor({
                 <div className="max-h-[32vh] overflow-y-auto pr-1">
                   <DiffView before={target.text} after={proposed.proposedText} />
                   <p className="mt-2 text-[11px] text-mute">ⓘ {proposed.rationale}</p>
+                  {proposed.groundedIn && proposed.groundedIn.length > 0 && (
+                    <p className="mt-1 text-[11px] font-medium text-periwinkle">
+                      📎 Grounded in: {proposed.groundedIn.join(', ')}
+                    </p>
+                  )}
                 </div>
                 {collateral.length > 0 ? (
                   <div className="mt-2 rounded border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] text-red-700">
