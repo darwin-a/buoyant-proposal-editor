@@ -16,6 +16,7 @@ export interface EditResponse {
   changedEntities: string[] // entities the edit intentionally changed; [] = none (faithfulness)
   clarification?: string // set when the model can't/won't edit — show a question, NOT a diff
   groundedIn?: string[] // KB source titles the edit actually drew from
+  sources?: { id: string; title: string }[] // the KB docs fed as context (for linking the citation)
 }
 export interface EditService {
   proposeEdit(req: EditRequest): Promise<EditResponse>

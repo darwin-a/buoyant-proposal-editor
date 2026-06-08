@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
   }
 
   let context: EditContext[] | undefined
+  let sources: { id: string; title: string }[] | undefined
   if (wantsGrounding(instruction)) {
     let kbIds: string[] | undefined
     if (typeof proposalId === 'string') {
@@ -27,12 +28,16 @@ export async function POST(req: NextRequest) {
     }
     try {
       const hits = await retrieve(buildRetrievalQuery(instruction, blockText), { kbIds })
-      if (hits.length) context = hits.map((h) => ({ source: h.kbTitle, heading: h.heading ?? undefined, text: h.text }))
+      if (hits.length) {
+        context = hits.map((h) => ({ source: h.kbTitle, heading: h.heading ?? undefined, text: h.text }))
+        // unique source docs, so the UI can link each citation to its PDF reader
+        sources = Array.from(new Map(hits.map((h) => [h.kbDocumentId, { id: h.kbDocumentId, title: h.kbTitle }])).values())
+      }
     } catch (err) {
       console.error('kb retrieve failed — proceeding ungrounded', err) // grounding is additive
     }
   }
 
   const result = await getEditService().proposeEdit({ blockText, instruction, context })
-  return NextResponse.json(result)
+  return NextResponse.json({ ...result, sources })
 }

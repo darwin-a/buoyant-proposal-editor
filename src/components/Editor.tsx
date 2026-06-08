@@ -239,7 +239,23 @@ export function Editor({
                   <p className="mt-2 text-[11px] text-mute">ⓘ {proposed.rationale}</p>
                   {proposed.groundedIn && proposed.groundedIn.length > 0 && (
                     <p className="mt-1 text-[11px] font-medium text-periwinkle">
-                      📎 Grounded in: {proposed.groundedIn.join(', ')}
+                      📎 Grounded in:{' '}
+                      {proposed.groundedIn.map((g, i) => {
+                        const src = proposed.sources?.find((s) => g.startsWith(s.title) || g.includes(s.title) || s.title.includes(g))
+                        const short = g.replace(/^Statement of Qualifications\s*[—-]\s*/i, '')
+                        return (
+                          <span key={i}>
+                            {i > 0 && ', '}
+                            {src ? (
+                              <a href={`/kb/${src.id}`} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-navy" title="Open the source proposal (PDF)">
+                                {short}
+                              </a>
+                            ) : (
+                              short
+                            )}
+                          </span>
+                        )
+                      })}
                     </p>
                   )}
                 </div>
