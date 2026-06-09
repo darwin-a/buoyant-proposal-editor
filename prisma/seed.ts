@@ -5,6 +5,8 @@ const prisma = new PrismaClient()
 // Real MECO team (from the proposals) + you. Roles map to our review workflow:
 // COORDINATOR drafts/recycles · PRINCIPAL reviews + signs off · ENGINEER contributes.
 const users = [
+  { name: 'Eric', email: 'eric@mecoengineering.com', role: Role.FOUNDER },
+  { name: 'Jackie', email: 'jackie@mecoengineering.com', role: Role.FOUNDER },
   { name: 'Sarah Mills', email: 'smills@mecoengineering.com', role: Role.COORDINATOR },
   { name: 'Donald Jenkins', email: 'djenkins@mecoengineering.com', role: Role.PRINCIPAL },
   { name: 'Scott Vogler', email: 'svogler@mecoengineering.com', role: Role.PRINCIPAL },
