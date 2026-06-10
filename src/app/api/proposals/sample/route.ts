@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getCurrentUser } from '@/lib/auth'
-import { createProposalFromPdf } from '@/lib/proposals'
+import { createProposalFromPdf } from '@/lib/proposals-pdf'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60

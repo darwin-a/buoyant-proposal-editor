@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { createProposalFromParsed } from '@/lib/proposals'
-import { validateParsedDoc } from '@/lib/parse'
+import { validateParsedDoc } from '@/lib/doc'
 
 export const runtime = 'nodejs'
 

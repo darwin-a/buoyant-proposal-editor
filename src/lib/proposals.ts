@@ -1,9 +1,9 @@
 import type { Prisma } from '@prisma/client'
 import { db } from './db'
-import { parsePdf, type ParsedDoc } from './parse'
+import type { ParsedDoc } from './doc'
 
-// Persist an already-parsed document. Used by the upload route, where parsing now
-// happens in the browser (so the 18 MB PDF never crosses Vercel's 4.5 MB body limit).
+// Persist an already-parsed document. NO pdfjs import — this is what the upload route
+// uses (parsing happens in the browser), so the route stays pdfjs-free on the server.
 export async function createProposalFromParsed(parsed: ParsedDoc, filename: string, userId: string) {
   return db.proposal.create({
     data: {
@@ -14,10 +14,4 @@ export async function createProposalFromParsed(parsed: ParsedDoc, filename: stri
       createdById: userId,
     },
   })
-}
-
-// Parse a PDF buffer server-side and persist. Used by seeding and the local sample
-// route, which read fixtures from disk (no HTTP body limit applies there).
-export async function createProposalFromPdf(data: Uint8Array, filename: string, userId: string) {
-  return createProposalFromParsed(await parsePdf(data, filename), filename, userId)
 }

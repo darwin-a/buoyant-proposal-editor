@@ -2,7 +2,7 @@
 //   node --env-file=.env --import tsx scripts/seed-proposals.ts
 import { readFile } from 'node:fs/promises'
 import { db } from '../src/lib/db'
-import { createProposalFromPdf } from '../src/lib/proposals'
+import { createProposalFromPdf } from '../src/lib/proposals-pdf'
 
 // active proposals = ones being edited (the kb/ corpus is the knowledge base, seeded separately)
 const FILES = ['docs/ExampleProposals/proposals/easy.pdf']

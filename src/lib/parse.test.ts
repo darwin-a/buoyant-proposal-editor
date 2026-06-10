@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { dedup, recoverBlocks, detectImmutables, collapseShadows, validateParsedDoc, type Line } from './parse'
+import { dedup, recoverBlocks, detectImmutables, collapseShadows, type Line } from './parse'
+import { validateParsedDoc } from './doc'
 
 // y decreases in reading order (top of page first)
 const L = (text: string, y: number, height = 12, x = 60): Line => ({ text, x, y, height })

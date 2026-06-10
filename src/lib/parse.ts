@@ -8,27 +8,16 @@ export function setPdfWorkerSrc(src: string) {
   GlobalWorkerOptions.workerSrc = src
 }
 
-export type BlockType = 'heading' | 'paragraph'
-export interface Block {
-  id: string
-  type: BlockType
-  text: string
-  level?: number
-}
-export interface LockedField {
-  label: string
-  value: string
-}
+// Document types + validateParsedDoc live in ./doc (pdfjs-free). Re-exported here so
+// existing `import { Block } from '@/lib/parse'` call sites keep working unchanged.
+export type { BlockType, Block, LockedField, ParsedDoc } from './doc'
+import type { Block, LockedField, ParsedDoc } from './doc'
+
 export interface Line {
   text: string
   x: number
   y: number // global, strictly decreasing in reading order
   height: number
-}
-export interface ParsedDoc {
-  title: string
-  blocks: Block[]
-  lockedFields: LockedField[]
 }
 
 const median = (xs: number[]): number => {
@@ -191,41 +180,6 @@ export function detectImmutables(fullText: string): LockedField[] {
 // ---- validate a client-parsed doc before persisting (parsing now runs in the browser) ----
 // The browser sends ParsedDoc JSON, so the server must not trust its shape. Returns a
 // sanitized doc, or null if it isn't a usable document.
-const MAX_BLOCKS = 5000
-const MAX_TEXT = 20_000
-export function validateParsedDoc(input: unknown): ParsedDoc | null {
-  if (typeof input !== 'object' || input === null) return null
-  const o = input as Record<string, unknown>
-  if (!Array.isArray(o.blocks)) return null
-
-  const blocks: Block[] = []
-  for (const b of o.blocks.slice(0, MAX_BLOCKS)) {
-    if (typeof b !== 'object' || b === null) continue
-    const r = b as Record<string, unknown>
-    if ((r.type !== 'heading' && r.type !== 'paragraph') || typeof r.text !== 'string' || !r.text.trim()) continue
-    blocks.push({
-      id: typeof r.id === 'string' && r.id ? r.id : `b-${blocks.length}`,
-      type: r.type,
-      text: r.text.slice(0, MAX_TEXT),
-      ...(typeof r.level === 'number' ? { level: r.level } : {}),
-    })
-  }
-  if (blocks.length === 0) return null
-
-  const lockedFields: LockedField[] = Array.isArray(o.lockedFields)
-    ? o.lockedFields.flatMap((f) => {
-        if (typeof f !== 'object' || f === null) return []
-        const r = f as Record<string, unknown>
-        return typeof r.label === 'string' && typeof r.value === 'string'
-          ? [{ label: r.label, value: r.value }]
-          : []
-      })
-    : []
-
-  const title = typeof o.title === 'string' && o.title.trim() ? o.title.slice(0, 300) : 'Untitled proposal'
-  return { title, blocks, lockedFields }
-}
-
 // ---- orchestrator ----
 export async function parsePdf(data: Uint8Array, filename: string): Promise<ParsedDoc> {
   const lines = dedup(await extractLines(data))
